@@ -8,6 +8,7 @@ export const NAV = [
   { key: "menu", href: "/admin/menu", roles: ["owner"] },
   { key: "branches", href: "/admin/branches", roles: ["owner", "manager"] },
   { key: "riders", href: "/admin/riders", roles: ["owner", "manager"] },
+  { key: "qr", href: "/admin/qr", roles: ["owner", "manager"] },
   { key: "staff", href: "/admin/staff", roles: ["owner"] },
 ] as const satisfies readonly { key: string; href: string; roles: readonly Role[] }[];
 

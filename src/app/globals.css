@@ -220,3 +220,20 @@ fieldset.opt-group { border: 0; padding: 0; min-width: 0; }
 .vbars .col:hover i, .vbars .col:focus-visible i { background: var(--color-red-deep); }
 .vbars { margin-block-end: 20px; }
 a.chip[aria-current="true"] { border-color: var(--color-red); background: #FFE9E4; color: var(--color-red-deep); }
+
+/* printable QR stand cards (A6-ish, 2 per row on A4) */
+.qr-sheet { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; }
+.qr-card { background: #fff; border: 3px solid var(--color-red); border-radius: 20px; padding: 18px; text-align: center; display: grid; gap: 6px; break-inside: avoid; }
+.qr-card img { inline-size: 100%; max-inline-size: 260px; margin-inline: auto; }
+.qr-brand { font-family: var(--font-display); font-size: 44px; line-height: 1; color: var(--color-red); }
+.qr-brand span { display: block; font-family: var(--font-body); font-size: 13px; color: var(--color-muted); letter-spacing: .08em; }
+.qr-skip { font-weight: 800; font-size: 18px; }
+.qr-branch { font-family: var(--font-display); font-size: 26px; color: var(--color-ink); }
+.qr-scan { font-size: 14px; color: var(--color-muted); }
+.qr-hot b { color: var(--color-red); font-size: 22px; }
+@media print {
+  .admin-bar, .no-print { display: none !important; }
+  .admin, body { background: #fff !important; }
+  .admin-body { max-width: none; padding: 0; }
+  .qr-sheet { grid-template-columns: 1fr 1fr; gap: 10mm; }
+}

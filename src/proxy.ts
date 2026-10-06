@@ -29,6 +29,8 @@ export async function proxy(request: NextRequest) {
     `img-src 'self' blob: data: ${supabase}`,
     "font-src 'self'",
     `connect-src 'self' ${supabase} ${ws}`,
+    "worker-src 'self'", // /sw.js
+    "manifest-src 'self'",
     "object-src 'none'",
     "base-uri 'self'",
     "form-action 'self'",
@@ -51,5 +53,5 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: [{ source: "/((?!_next/static|_next/image|favicon.ico).*)", missing: [{ type: "header", key: "next-router-prefetch" }] }],
+  matcher: [{ source: "/((?!_next/static|_next/image|favicon.ico|icon.png|icons/|sw.js).*)", missing: [{ type: "header", key: "next-router-prefetch" }] }],
 };
