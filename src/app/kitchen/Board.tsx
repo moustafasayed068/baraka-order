@@ -12,11 +12,13 @@ type MenuRow = { id: string; name_ar: string; name_en: string; sold_out: boolean
 const NO_SHOW_MIN = 30;
 const minsSince = (iso: string, now: number) => Math.max(0, Math.floor((now - Date.parse(iso)) / 60_000));
 
-export function Board({ lang, branch, initial, riders }: { lang: Lang; branch: DeviceBranch; initial: KitchenOrder[]; riders: BranchRider[] }) {
+export function Board({ lang, branch, initial, riders, serverNow }: {
+  lang: Lang; branch: DeviceBranch; initial: KitchenOrder[]; riders: BranchRider[]; serverNow: number;
+}) {
   const t = dict[lang].kitchen;
   const [orders, setOrders] = useState(initial);
   const [fetchOk, setFetchOk] = useState(true);
-  const [now, setNow] = useState(() => Date.now());
+  const [now, setNow] = useState(serverNow); // start from the server's clock so the page hydrates cleanly
   const [unacked, setUnacked] = useState<number[]>([]); // new order numbers nobody has acknowledged yet
   const [busy, setBusy] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);

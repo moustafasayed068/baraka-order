@@ -206,3 +206,6 @@ export async function photoBase() {
   const host = ((await headers()).get("host") ?? "localhost").replace(/:\d+$/, "");
   return `${devHost(url, host)}/storage/v1/object/public/menu-photos/`;
 }
+
+// Request-time clock for server pages (rendered once per request, so reading the clock here is fine).
+export const requestTime = () => Date.now();
