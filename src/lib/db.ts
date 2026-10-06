@@ -1,7 +1,8 @@
 import "server-only";
 import { createHash } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
+import { devHost } from "./host";
 import type { Lang } from "./i18n";
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -198,4 +199,10 @@ export async function riderView(riderId: string, shiftStart: string) {
   if (orders.error) throw orders.error;
   const cash = (delivered.data ?? []).filter((o) => o.payment_method === "cash").reduce((s, o) => s + o.total, 0);
   return { orders: orders.data as RiderOrder[], cash, deliveredCount: delivered.data?.length ?? 0 };
+}
+
+// Menu photos are stored as paths in the public "menu-photos" bucket; build a URL the viewer's device can reach.
+export async function photoBase() {
+  const host = ((await headers()).get("host") ?? "localhost").replace(/:\d+$/, "");
+  return `${devHost(url, host)}/storage/v1/object/public/menu-photos/`;
 }

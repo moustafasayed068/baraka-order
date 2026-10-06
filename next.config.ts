@@ -7,6 +7,8 @@ const lanIps = Object.values(networkInterfaces()).flat().filter((n) => n?.family
 const nextConfig: NextConfig = {
   poweredByHeader: false,
   allowedDevOrigins: lanIps,
+  // menu photo uploads (max 2 MB, checked again in the action)
+  experimental: { serverActions: { bodySizeLimit: "3mb" } },
 };
 
 export default nextConfig;

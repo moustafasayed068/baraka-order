@@ -127,6 +127,17 @@ describe("owner", () => {
   });
 });
 
+describe("menu photos", () => {
+  it("only the owner can upload", async () => {
+    const img = new Blob([new Uint8Array([82, 73, 70, 70])], { type: "image/webp" });
+    const path = `test/${randomUUID()}.webp`;
+    expect((await anon.storage.from("menu-photos").upload(path, img, { contentType: "image/webp" })).error).not.toBeNull();
+    expect((await manager.storage.from("menu-photos").upload(path, img, { contentType: "image/webp" })).error).not.toBeNull();
+    expect((await owner.storage.from("menu-photos").upload(path, img, { contentType: "image/webp" })).error).toBeNull();
+    await admin.storage.from("menu-photos").remove([path]);
+  });
+});
+
 describe("order numbers", () => {
   it("are unique per branch per day under concurrency", async () => {
     const ids = await Promise.all(Array.from({ length: 10 }, () => order(bahary)));

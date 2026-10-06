@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AppHead } from "@/components/AppHead";
-import { activeOrderCount, DELIVERY_TRAVEL_MIN, estimateMin, getBranch, getLang, publicDb } from "@/lib/db";
+import { activeOrderCount, DELIVERY_TRAVEL_MIN, estimateMin, getBranch, getLang, photoBase, publicDb } from "@/lib/db";
 import { fmtTime, isOpenAt } from "@/lib/hours";
 import { dict, pick } from "@/lib/i18n";
 import { Menu, type Delivery, type MenuItem } from "./Menu";
@@ -12,7 +12,7 @@ export default async function BranchPage({ params, searchParams }: PageProps<"/b
   if (!branch) notFound();
   const t = dict[lang];
   const db = publicDb();
-  const [cats, items, soldOut, active, zones] = await Promise.all([
+  const [cats, items, soldOut, active, zones, base] = await Promise.all([
     db.from("categories").select("id, slug, name_ar, name_en").order("sort"),
     db.from("menu_items")
       .select("id, slug, category_id, name_ar, name_en, desc_ar, desc_en, base_price, photo_url, is_meal, options:item_options(id, kind, name_ar, name_en, price_delta, sort)")
@@ -20,11 +20,13 @@ export default async function BranchPage({ params, searchParams }: PageProps<"/b
     db.from("branch_item_status").select("item_id").eq("branch_id", branch.id).eq("sold_out", true),
     activeOrderCount(branch.id),
     db.from("delivery_zones").select("fee, min_order, max_km").eq("branch_id", branch.id).eq("active", true).order("fee"),
+    photoBase(),
   ]);
   if (cats.error || items.error) throw cats.error ?? items.error;
   const out = new Set(soldOut.data?.map((s) => s.item_id));
   const menu = (items.data as Omit<MenuItem, "sold_out">[]).map((i) => ({
     ...i,
+    photo_url: i.photo_url && base + i.photo_url,
     options: [...i.options].sort((a, b) => a.sort - b.sort),
     sold_out: out.has(i.id),
   }));
