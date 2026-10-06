@@ -74,7 +74,7 @@ export default async function Dashboard({ searchParams }: PageProps<"/admin">) {
               {d.best.map((b) => (
                 <li key={b.name_en} title={`${pick(b, lang)}: ${b.qty}`}>
                   <span className="lbl">{pick(b, lang)}</span>
-                  <span className="track"><i style={{ inlineSize: `${(b.qty / maxBest) * 100}%` }} /></span>
+                  <span className="bar-track"><i style={{ inlineSize: `${(b.qty / maxBest) * 100}%` }} /></span>
                   <b className="num">{b.qty}</b>
                 </li>
               ))}
@@ -87,7 +87,7 @@ export default async function Dashboard({ searchParams }: PageProps<"/admin">) {
               {HOURS.map((h) => {
                 const n = d.by_hour[h] ?? 0;
                 return (
-                  <div key={h} className="col" title={`${String(h).padStart(2, "0")}:00 — ${n}`} tabIndex={0}>
+                  <div key={h} className="vcol" title={`${String(h).padStart(2, "0")}:00 — ${n}`} tabIndex={0}>
                     <i style={{ blockSize: `${(n / maxHour) * 100}%` }} />
                     <span className="num">{h}</span>
                   </div>
