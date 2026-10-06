@@ -19,3 +19,8 @@ export function isOpenAt(opensAt: string, closesAt: string, now = new Date()): b
 // "09:00:00" -> "9:00 AM"
 export const fmtTime = (t: string, lang: "ar" | "en") =>
   new Date(`2000-01-01T${t.slice(0, 5)}:00`).toLocaleTimeString(lang === "ar" ? "ar-EG" : "en-US", { hour: "numeric", minute: "2-digit" });
+
+// Cairo business day: hours run past midnight (to 4 AM), so the day flips at 06:00 Cairo time.
+// Same rule as business_date() in the database.
+export const businessDate = (now = new Date()) =>
+  new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo" }).format(new Date(now.getTime() - 6 * 3600_000));

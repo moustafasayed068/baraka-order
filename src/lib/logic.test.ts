@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { priceLines, type DbItem } from "./pricing";
 import { distanceKm, nearestBranch } from "./geo";
-import { isOpenAt } from "./hours";
+import { businessDate, isOpenAt } from "./hours";
 import { totp } from "./totp";
 
 const strips: DbItem = {
@@ -64,5 +64,16 @@ describe("totp", () => {
   it("matches the RFC 6238 test vector", () => {
     // secret "12345678901234567890" in base32, T = 59 s -> 287082 (last 6 digits of 94287082)
     expect(totp("GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ", 59_000)).toBe("287082");
+  });
+});
+
+describe("businessDate (Cairo, 06:00 cut-off)", () => {
+  it("after midnight still belongs to the previous day", () => {
+    expect(businessDate(new Date("2026-10-06T22:30:00Z"))).toBe("2026-10-06"); // 01:30 Cairo on the 7th (UTC+3)
+    expect(businessDate(new Date("2026-10-07T03:30:00Z"))).toBe("2026-10-07"); // 06:30 Cairo
+  });
+  it("winter time (UTC+2)", () => {
+    expect(businessDate(new Date("2026-12-15T03:30:00Z"))).toBe("2026-12-14"); // 05:30 Cairo
+    expect(businessDate(new Date("2026-12-15T04:30:00Z"))).toBe("2026-12-15"); // 06:30 Cairo
   });
 });
