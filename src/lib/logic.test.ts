@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { priceLines, type DbItem } from "./pricing";
 import { distanceKm, nearestBranch } from "./geo";
 import { isOpenAt } from "./hours";
+import { totp } from "./totp";
 
 const strips: DbItem = {
   id: "strips", name_ar: "وجبة ستربس", name_en: "Strips Meal", base_price: 155, active: true,
@@ -56,5 +57,12 @@ describe("delivery by distance", () => {
     expect(nearestBranch([31.25, 29.98], [smouha, sidiBishr])?.b.slug).toBe("sidi-bishr");
     expect(nearestBranch([31.21, 29.94], [smouha, sidiBishr])?.b.slug).toBe("smouha");
     expect(nearestBranch([30.04, 31.23], [smouha, sidiBishr])).toBeUndefined(); // Cairo: offer pickup
+  });
+});
+
+describe("totp", () => {
+  it("matches the RFC 6238 test vector", () => {
+    // secret "12345678901234567890" in base32, T = 59 s -> 287082 (last 6 digits of 94287082)
+    expect(totp("GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ", 59_000)).toBe("287082");
   });
 });

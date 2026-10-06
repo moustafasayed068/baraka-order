@@ -3,6 +3,7 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { totp } from "../src/lib/totp";
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -13,9 +14,9 @@ const PASSWORD = "Test-password-1234";
 const users: string[] = [];
 let bahary: string, smouha: string, water: string;
 let baharyOrder: string, smouhaOrder: string;
-let owner: SupabaseClient, manager: SupabaseClient;
+let owner: SupabaseClient, manager: SupabaseClient, managerNo2fa: SupabaseClient;
 
-async function staffClient(role: "owner" | "manager", branchId: string | null) {
+async function staffClient(role: "owner" | "manager", branchId: string | null, with2fa = true) {
   const email = `${role}-${randomUUID()}@test.local`;
   const { data, error } = await admin.auth.admin.createUser({ email, password: PASSWORD, email_confirm: true });
   if (error) throw error;
@@ -23,6 +24,12 @@ async function staffClient(role: "owner" | "manager", branchId: string | null) {
   await admin.from("staff").insert({ user_id: data.user.id, role, branch_id: branchId, name: role }).throwOnError();
   const c = createClient(url, anonKey, { auth: { persistSession: false } });
   await c.auth.signInWithPassword({ email, password: PASSWORD });
+  if (with2fa) {
+    const { data: f, error: e } = await c.auth.mfa.enroll({ factorType: "totp" });
+    if (e) throw e;
+    const { error: v } = await c.auth.mfa.challengeAndVerify({ factorId: f.id, code: totp(f.totp.secret) });
+    if (v) throw v;
+  }
   return c;
 }
 
@@ -45,6 +52,7 @@ beforeAll(async () => {
   smouhaOrder = await order(smouha);
   owner = await staffClient("owner", null);
   manager = await staffClient("manager", bahary);
+  managerNo2fa = await staffClient("manager", bahary, false);
 });
 
 afterAll(async () => {
@@ -91,6 +99,21 @@ describe("branch manager", () => {
   it("cannot edit the chain menu or read the audit log", async () => {
     expect((await manager.from("menu_items").update({ base_price: 1 }).eq("id", water).select()).data).toEqual([]);
     expect((await manager.from("audit_log").select("*")).data).toEqual([]);
+  });
+});
+
+describe("manager without 2FA", () => {
+  it("gets no manager rights until 2FA is done", async () => {
+    expect((await managerNo2fa.from("orders").select("id").eq("id", baharyOrder)).data).toEqual([]);
+    expect((await managerNo2fa.rpc("set_branch_pin", { p_branch: bahary, p_pin: "9999" })).error).not.toBeNull();
+  });
+});
+
+describe("audit trail", () => {
+  it("records a manager's manual order change", async () => {
+    await manager.from("orders").update({ problem: "test note" }).eq("id", baharyOrder);
+    const { data } = await admin.from("audit_log").select("action, entity").eq("entity_id", baharyOrder).eq("entity", "orders");
+    expect(data!.length).toBeGreaterThan(0);
   });
 });
 

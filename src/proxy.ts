@@ -1,7 +1,21 @@
+import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { authCookie } from "@/lib/auth";
 
-// Security headers + per-request CSP nonce for every page.
-export function proxy(request: NextRequest) {
+// Security headers + per-request CSP nonce for every page; refreshes the staff session on /admin.
+export async function proxy(request: NextRequest) {
+  // Staff session refresh (server components can't write cookies, so it happens here).
+  const refreshed: { name: string; value: string; options: object }[] = [];
+  if (request.nextUrl.pathname.startsWith("/admin")) {
+    const sb = createServerClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
+      cookies: {
+        getAll: () => request.cookies.getAll(),
+        setAll: (list) => list.forEach((c) => { request.cookies.set(c.name, c.value); refreshed.push(c); }),
+      },
+    });
+    await sb.auth.getUser();
+  }
+
   const nonce = Buffer.from(crypto.randomUUID()).toString("base64");
   const dev = process.env.NODE_ENV === "development";
   const env = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
@@ -29,6 +43,7 @@ export function proxy(request: NextRequest) {
   requestHeaders.set("x-nonce", nonce);
   requestHeaders.set("Content-Security-Policy", csp);
   const res = NextResponse.next({ request: { headers: requestHeaders } });
+  refreshed.forEach((c) => res.cookies.set(c.name, c.value, { ...c.options, ...authCookie }));
   res.headers.set("Content-Security-Policy", csp);
   res.headers.set("X-Content-Type-Options", "nosniff");
   res.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");

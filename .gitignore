@@ -45,3 +45,6 @@ next-env.d.ts
 supabase/.temp/
 supabase/.branches/
 
+
+# local test logins written by scripts/create-staff.mjs
+*.local.txt

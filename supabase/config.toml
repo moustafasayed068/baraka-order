@@ -270,9 +270,9 @@ max_frequency = "5s"
 # 4152127777 = "123456"
 
 # Configure logged in session timeouts.
-# [auth.sessions]
+[auth.sessions]
 # Force log out after the specified duration.
-# timebox = "24h"
+timebox = "12h" # staff sessions end after 12 h (CLAUDE.md)
 # Force log out if the user has been inactive longer than the specified duration.
 # inactivity_timeout = "8h"
 
@@ -301,8 +301,8 @@ max_enrolled_factors = 10
 
 # Control MFA via App Authenticator (TOTP)
 [auth.mfa.totp]
-enroll_enabled = false
-verify_enabled = false
+enroll_enabled = true
+verify_enabled = true
 
 # Configure MFA via Phone Messaging
 [auth.mfa.phone]
