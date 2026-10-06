@@ -199,3 +199,24 @@ fieldset.opt-group { border: 0; padding: 0; min-width: 0; }
 .grid-form .field { margin: 0; }
 .grid-form .field input, .grid-form .field select { width: 100%; }
 .ok-note { color: var(--color-ok); font-weight: 700; }
+
+/* dashboard: stat tiles + single-series bars (one brand hue, thin marks, rounded data ends, 2px gaps) */
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+.kpi { background: #fff; border: 1px solid var(--color-line); border-radius: 16px; padding: 14px 16px; display: grid; gap: 2px; }
+.kpi > span { font-size: 13px; color: var(--color-muted); font-weight: 600; }
+.kpi > b { font-family: var(--font-display); font-weight: 400; font-size: 36px; line-height: 1.1; }
+.kpi > b small { font-family: var(--font-body); font-size: 15px; color: var(--color-muted); }
+.kpi > small { font-size: 12.5px; color: var(--color-muted); }
+.hbars { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.hbars li { display: grid; grid-template-columns: minmax(0, 9rem) 1fr 2.5rem; gap: 8px; align-items: center; font-size: 14px; }
+.hbars .lbl { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hbars .track { block-size: 12px; }
+.hbars i { display: block; block-size: 100%; min-inline-size: 2px; background: var(--color-red); border-start-end-radius: 4px; border-end-end-radius: 4px; }
+.hbars b { text-align: end; }
+.vbars { display: flex; align-items: flex-end; gap: 2px; block-size: 160px; border-block-end: 1px solid var(--color-line); }
+.vbars .col { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; block-size: 100%; position: relative; outline-offset: 2px; }
+.vbars .col i { display: block; inline-size: 70%; background: var(--color-red); border-radius: 4px 4px 0 0; min-block-size: 0; }
+.vbars .col span { position: absolute; inset-block-end: -18px; font-size: 10.5px; color: var(--color-muted); }
+.vbars .col:hover i, .vbars .col:focus-visible i { background: var(--color-red-deep); }
+.vbars { margin-block-end: 20px; }
+a.chip[aria-current="true"] { border-color: var(--color-red); background: #FFE9E4; color: var(--color-red-deep); }

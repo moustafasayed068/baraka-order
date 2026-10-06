@@ -31,3 +31,23 @@ export async function saveRider(_: ActionResult, fd: FormData): Promise<ActionRe
   revalidatePath("/admin/riders");
   return { ok: true };
 }
+
+// End-of-shift cash: the expected amount is recomputed here from delivered cash orders, never taken from the form.
+export async function recordHandover(_: ActionResult, fd: FormData): Promise<ActionResult> {
+  await requireStaff(rolesFor("riders"));
+  const p = z.object({
+    rider_id: z.uuid(),
+    business_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    amount: z.coerce.number().int().min(0).max(1_000_000),
+  }).safeParse(Object.fromEntries(fd));
+  if (!p.success) return { error: "invalid" };
+  const db = await staffDb();
+  const { data: orders, error } = await db.from("orders").select("total")
+    .eq("rider_id", p.data.rider_id).eq("business_date", p.data.business_date).eq("status", "delivered").eq("payment_method", "cash");
+  if (error) return { error: "error" };
+  const expected = orders.reduce((s, o) => s + o.total, 0);
+  const { error: e2 } = await db.from("rider_handovers").insert({ ...p.data, expected }); // RLS: manager of the rider's branch
+  if (e2) return { error: "error" };
+  revalidatePath("/admin/riders");
+  return { ok: true };
+}
