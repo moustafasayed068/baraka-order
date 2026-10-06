@@ -45,5 +45,3 @@ next-env.d.ts
 supabase/.temp/
 supabase/.branches/
 
-# local https certificate for phone testing
-certs/
