@@ -1,0 +1,35 @@
+{
+  "name": "baraka-order",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -H 0.0.0.0",
+    "build": "next build && node --env-file-if-exists=.env.local scripts/check-secrets.mjs",
+    "start": "next start -H 0.0.0.0",
+    "lint": "eslint",
+    "test": "vitest run --project unit",
+    "db:start": "supabase start",
+    "db:reset": "supabase db reset",
+    "test:rls": "node --env-file=.env.local node_modules/vitest/vitest.mjs run --project rls"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.117.2",
+    "next": "16.3.8",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "server-only": "^0.0.1",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^24.19.1",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.3.8",
+    "supabase": "^2.119.0",
+    "tailwindcss": "^4",
+    "typescript": "^5",
+    "vitest": "^5.0.3"
+  }
+}
