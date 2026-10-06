@@ -2,7 +2,7 @@ import { rolesFor } from "@/lib/admin-nav";
 import { requireStaff, type Role } from "@/lib/auth";
 import { adminDb, getLang } from "@/lib/db";
 import { dict, pick } from "@/lib/i18n";
-import { removeStaff } from "./actions";
+import { removeStaff, resetStaff2fa } from "./actions";
 import { AddStaffForm } from "./AddStaffForm";
 
 export default async function StaffPage() {
@@ -45,7 +45,10 @@ export default async function StaffPage() {
                     <td className={twoFaRequired && !has2fa(s.user_id) ? "text-red font-bold" : ""}>{has2fa(s.user_id) ? t.on : t.off}</td>
                     <td>
                       {s.user_id === me.userId ? <span className="text-muted">{t.you}</span> : (
-                        <form action={removeStaff}><input type="hidden" name="id" value={s.user_id} /><button type="submit" className="chip text-red!">{t.remove}</button></form>
+                        <div className="flex flex-wrap gap-2">
+                          {has2fa(s.user_id) && <form action={resetStaff2fa}><input type="hidden" name="id" value={s.user_id} /><button type="submit" className="chip">{t.reset2fa}</button></form>}
+                          <form action={removeStaff}><input type="hidden" name="id" value={s.user_id} /><button type="submit" className="chip text-red!">{t.remove}</button></form>
+                        </div>
                       )}
                     </td>
                   </tr>

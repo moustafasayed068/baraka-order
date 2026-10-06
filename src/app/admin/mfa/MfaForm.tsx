@@ -19,7 +19,7 @@ export function MfaForm({ lang, factorId, qr, secret }: { lang: Lang; factorId: 
             <p className="text-sm">{t.mfaSecret} <code dir="ltr" className="break-all">{secret}</code></p>
           </>
         )}
-        {!qr && <p>{t.mfaEnter}</p>}
+        {!qr && <><p>{t.mfaEnter}</p><p className="text-sm text-muted">{t.mfaLost}</p></>}
         <input type="hidden" name="factorId" value={factorId} />
         <div className="field">
           <label htmlFor="code">{t.mfaCode}</label>

@@ -37,6 +37,19 @@ export async function addStaff(_: StaffResult, fd: FormData): Promise<StaffResul
   return { ok: true, password }; // shown once to the owner, never stored in plain text
 }
 
+// Lost phone: remove the person's authenticator; they scan a new QR at the next sign-in.
+// The owner can't reset themselves here (use scripts/reset-2fa.mjs), so an owner can't be locked out by a mistake.
+export async function resetStaff2fa(fd: FormData) {
+  const owner = await requireStaff(rolesFor("staff"));
+  const id = z.uuid().parse(fd.get("id"));
+  if (id === owner.userId) return;
+  const db = adminDb();
+  const { data } = await db.auth.admin.mfa.listFactors({ userId: id });
+  for (const f of data?.factors ?? []) await db.auth.admin.mfa.deleteFactor({ userId: id, id: f.id });
+  await db.from("audit_log").insert({ actor: owner.userId, action: "staff_2fa_reset", entity: "staff", entity_id: id });
+  revalidatePath("/admin/staff");
+}
+
 export async function removeStaff(fd: FormData) {
   const owner = await requireStaff(rolesFor("staff"));
   const id = z.uuid().parse(fd.get("id"));
