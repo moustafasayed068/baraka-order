@@ -111,8 +111,7 @@ export function Board({ lang, branch, initial }: { lang: Lang; branch: DeviceBra
           <b className="text-lg">{o.first_name}</b>
           <span className={`ktag ${o.type === "delivery" ? "dark" : ""}`}>{o.type === "pickup" ? t.pickup : t.delivery}</span>
           {o.pickup_in_min > 0 && <span className="ktag">{t.inMin(o.pickup_in_min)}</span>}
-          {o.zone && <span className="ktag">{pick(o.zone, lang)}</span>}
-          {o.needs_call_confirm && <span className="ktag dark">📞 {t.callConfirm}</span>}
+          {o.call_phone && <a href={`tel:${o.call_phone}`} className="ktag dark call" dir="ltr">📞 {t.callConfirm} {o.call_phone}</a>}
         </div>
         <ul>
           {o.items.map((l, i) => (

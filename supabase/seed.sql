@@ -54,11 +54,20 @@ select i.id, 'sauce', v.ar, v.en, 0, v.sort
 from (values ('باربكيو + ثومية', 'BBQ + garlic', 1), ('رانش', 'Ranch', 2), ('سويت تشيلي', 'Sweet chili', 3), ('تشيزي', 'Cheesy', 4)) v(ar, en, sort)
 cross join menu_items i where i.slug in ('fatta', 'basmatio');
 
--- SAMPLE delivery zones: real areas, fees and minimums are not known yet. Edit in admin.
-insert into delivery_zones (branch_id, name_ar, name_en, fee, min_order, is_sample)
-select b.id, v.ar || ' (تجريبي)', v.en || ' (sample)', v.fee, v.min_order, true
-from branches b
-cross join (values ('المنطقة القريبة', 'Nearby area', 20, 150), ('المنطقة البعيدة', 'Farther area', 35, 200)) v(ar, en, fee, min_order);
+-- Branch locations and the fixed delivery fee are set by migration 20261006000004 for existing
+-- databases; repeat them here because seed runs after migrations on a fresh reset.
+update branches b set lat = v.lat, lng = v.lng
+from (values
+  ('bahary', 31.2008, 29.8950), ('camp-shezar', 31.2105, 29.9250), ('smouha', 31.2065, 29.9500),
+  ('el-ezaa', 31.2367, 29.9661), ('el-mahrousa', 31.2700, 30.0000), ('sidi-bishr', 31.2560, 29.9880),
+  ('el-mandara', 31.2830, 30.0170), ('mohandessin', 30.0530, 31.2010), ('mokattam', 30.0137, 31.2950),
+  ('sheraton', 30.1050, 31.3740)
+) v(slug, lat, lng)
+where b.slug = v.slug;
+
+-- SAMPLE delivery settings (fee 25, minimum 140, up to 7 km). Real numbers set by the owner in admin.
+insert into delivery_zones (branch_id, name_ar, name_en, fee, min_order, max_km, is_sample)
+select id, 'التوصيل', 'Delivery', 25, 140, 7, true from branches;
 
 -- DEV ONLY: every branch PIN is 1234 for local testing. Real PINs are set per branch before launch.
 insert into branch_pins (branch_id, pin_hash) select id, extensions.crypt('1234', extensions.gen_salt('bf')) from branches;

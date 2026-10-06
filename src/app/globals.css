@@ -141,6 +141,7 @@ button:focus-visible, input:focus-visible, a:focus-visible { outline: 3px solid 
 .tk .go.quiet { background: transparent; color: var(--color-bad); border: 2px solid var(--color-bad); min-height: 44px; font-size: 15px; }
 .ktag { font-size: 12px; font-weight: 800; padding: 2px 9px; border-radius: 999px; background: #FFE9E4; color: var(--color-red-deep); }
 .ktag.dark { background: var(--color-ink); color: #fff; }
+.ktag.call { font-size: 16px; padding: 8px 14px; min-height: 44px; display: inline-flex; align-items: center; gap: 6px; background: var(--color-ok); }
 .stock { min-width: 96px; min-height: 44px; padding: 0 14px; border-radius: 999px; font-weight: 800; font-size: 15px; background: #E7F6EC; color: var(--color-ok); border: 2px solid #BFE5CC; }
 .stock[aria-pressed="true"] { background: var(--color-bad); color: #fff; border-color: var(--color-bad); }
 .empty { color: #B79C95; font-size: 15px; padding: 24px 6px; text-align: center; }

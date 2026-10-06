@@ -2,6 +2,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { elapsed, saveOrder, store, uuid } from "@/lib/client";
+import { distanceKm, type Pt } from "@/lib/geo";
 import { dict, pick, type ErrorCode, type Lang } from "@/lib/i18n";
 import { normalizePhone, PHONE_RE } from "@/lib/phone";
 
@@ -12,7 +13,7 @@ export type MenuItem = {
 };
 type Category = { id: string; slug: string; name_ar: string; name_en: string };
 type Line = { itemId: string; optionId: string | null; qty: number };
-export type Zone = { id: string; name_ar: string; name_en: string; fee: number; min_order: number };
+export type Delivery = { fee: number; min_order: number; max_km: number; branchPt: Pt | null; eta: number };
 type Address = { street: string; building: string; floor: string; apartment: string; landmark: string; lat: number | null; lng: number | null };
 type Saved = Partial<Record<"home" | "work", Address>>;
 const EMPTY_ADDR: Address = { street: "", building: "", floor: "", apartment: "", landmark: "", lat: null, lng: null };
@@ -21,9 +22,9 @@ type Sheet = null | { kind: "cart" } | { kind: "item"; item: MenuItem; optionId:
 const MAX_QTY = 20;
 const unitPrice = (i: MenuItem, optionId: string | null) => i.base_price + (i.options.find((o) => o.id === optionId)?.price_delta ?? 0);
 
-export function Menu({ lang, branch, categories, items, blocked, zones, acceptsDelivery, deliveryEta, initialZone }: {
+export function Menu({ lang, branch, categories, items, blocked, delivery: zone, acceptsDelivery, initialMode }: {
   lang: Lang; branch: string; categories: Category[]; items: MenuItem[]; blocked: boolean;
-  zones: Zone[]; acceptsDelivery: boolean; deliveryEta: number; initialZone: string | null;
+  delivery: Delivery | null; acceptsDelivery: boolean; initialMode: "pickup" | "delivery";
 }) {
   const t = dict[lang];
   const router = useRouter();
@@ -33,8 +34,7 @@ export function Menu({ lang, branch, categories, items, blocked, zones, acceptsD
   const [cart, setCart] = useState<Line[]>([]);
   const [me, setMe] = useState({ name: "", phone: "" });
   const [pickupInMin, setPickupInMin] = useState<0 | 15 | 30>(0);
-  const [mode, setMode] = useState<"pickup" | "delivery">(initialZone ? "delivery" : "pickup");
-  const [zoneId, setZoneId] = useState(zones.some((z) => z.id === initialZone) ? initialZone! : "");
+  const [mode, setMode] = useState(initialMode);
   const [addr, setAddr] = useState<Address>(EMPTY_ADDR);
   const [saved, setSaved] = useState<Saved>({});
   const [saveAs, setSaveAs] = useState<"home" | "work" | null>(null);
@@ -56,7 +56,9 @@ export function Menu({ lang, branch, categories, items, blocked, zones, acceptsD
     setMe(store.get("bk_me", { name: "", phone: "" }));
     const s = store.get<Saved>("bk_addr", {});
     setSaved(s);
-    setAddr(s.home ?? s.work ?? EMPTY_ADDR);
+    const pin = store.get<Pt | null>("bk_pin", null); // from "use my location" on the home page
+    const a = s.home ?? s.work ?? EMPTY_ADDR;
+    setAddr(pin ? { ...a, lat: pin[0], lng: pin[1] } : a);
     /* eslint-enable react-hooks/set-state-in-effect */
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [branch]);
@@ -84,24 +86,20 @@ export function Menu({ lang, branch, categories, items, blocked, zones, acceptsD
   const nameOk = me.name.trim().length >= 2;
   const hasBad = lines.some((l) => isOut(l.itemId));
   const delivery = mode === "delivery";
-  const zone = zones.find((z) => z.id === zoneId);
   const fee = delivery && zone ? zone.fee : 0;
   const short = delivery && zone ? Math.max(0, zone.min_order - total) : 0;
-  const deliveryOk = !delivery || (acceptsDelivery && !!zone && short === 0 && addr.street.trim().length >= 3);
+  const tooFar = delivery && !!zone?.branchPt && addr.lat !== null && addr.lng !== null && distanceKm([addr.lat, addr.lng], zone.branchPt) > zone.max_km;
+  const deliveryOk = !delivery || (acceptsDelivery && !!zone && short === 0 && !tooFar && addr.street.trim().length >= 3);
   const canSend = !blocked && !sending && lines.length > 0 && nameOk && phoneOk && !hasBad && deliveryOk;
 
   // keep the choice in the URL so a delivery link can be shared or reopened
   function chooseMode(m: "pickup" | "delivery") {
     setMode(m);
-    history.replaceState(null, "", m === "delivery" && zoneId ? `?zone=${zoneId}` : location.pathname);
-  }
-  function chooseZone(id: string) {
-    setZoneId(id);
-    history.replaceState(null, "", id ? `?zone=${id}` : location.pathname);
+    history.replaceState(null, "", m === "delivery" ? "?mode=delivery" : location.pathname);
   }
   function pin() {
     setGpsMsg(null);
-    if (!navigator.geolocation) return setGpsMsg(t.delivery.gpsFail);
+    if (!navigator.geolocation || !window.isSecureContext) return setGpsMsg(t.delivery.gpsFail);
     navigator.geolocation.getCurrentPosition(
       (p) => setAddr((a) => ({ ...a, lat: +p.coords.latitude.toFixed(6), lng: +p.coords.longitude.toFixed(6) })),
       () => setGpsMsg(t.delivery.gpsFail),
@@ -121,7 +119,7 @@ export function Menu({ lang, branch, categories, items, blocked, zones, acceptsD
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           branch, idempotencyKey: idemKey.current, type: mode, name: me.name.trim(), phone,
-          ...(delivery ? { pickupInMin: 0, zoneId, address: addr } : { pickupInMin }),
+          ...(delivery ? { pickupInMin: 0, address: addr } : { pickupInMin }),
           lines: lines.map(({ itemId, optionId, qty }) => ({ itemId, optionId, qty })),
           website: honeypot.current?.value ?? "", fillMs: elapsed(mountedAt.current),
         }),
@@ -154,25 +152,17 @@ export function Menu({ lang, branch, categories, items, blocked, zones, acceptsD
           <button type="button" aria-pressed={!delivery} onClick={() => chooseMode("pickup")}>{t.delivery.pickup}</button>
           <button type="button" aria-pressed={delivery} onClick={() => chooseMode("delivery")}>{t.delivery.delivery}</button>
         </div>
-        {delivery && (!acceptsDelivery || zones.length === 0 ? (
+        {delivery && (!acceptsDelivery || !zone ? (
           <div className="banner mx-0! mb-0!">
             {acceptsDelivery ? t.delivery.noZones : t.delivery.paused}
             <button type="button" className="btn alt mt-2" onClick={() => chooseMode("pickup")}>{t.delivery.usePickup}</button>
           </div>
         ) : (
-          <div className="field mb-0!">
-            <label htmlFor="f-zone">{t.delivery.chooseArea}</label>
-            <select id="f-zone" className="select" value={zoneId} onChange={(e) => chooseZone(e.target.value)}>
-              <option value="">{t.delivery.areaPh}</option>
-              {zones.map((z) => <option key={z.id} value={z.id}>{pick(z, lang)} · {t.delivery.fee} {z.fee} {t.egp}</option>)}
-            </select>
-            {zone && (
-              <span className="text-sm text-muted num">
-                {t.delivery.fee} {zone.fee} {t.egp} · {t.delivery.minOrder(zone.min_order)} · {t.delivery.eta(deliveryEta)}
-              </span>
-            )}
-          </div>
+          <p className="mt-2 text-sm text-muted num">
+            {t.delivery.fee} {zone.fee} {t.egp} · {t.delivery.minOrder(zone.min_order)} · {t.delivery.eta(zone.eta)}
+          </p>
         ))}
+        {tooFar && <p className="banner mx-0! mb-0!">{t.delivery.tooFar}</p>}
       </div>
 
       <nav className="cats" aria-label="menu">
@@ -294,7 +284,7 @@ export function Menu({ lang, branch, categories, items, blocked, zones, acceptsD
               </div>
               {delivery && (
                 <fieldset className="opt-group">
-                  <h4>{t.delivery.address}{zone && <> · {pick(zone, lang)}</>}</h4>
+                  <h4>{t.delivery.address}</h4>
                   {(saved.home || saved.work) && (
                     <div className="chips mb-2" aria-label={t.delivery.saved}>
                       {(["home", "work"] as const).map((k) => saved[k] && (
@@ -351,11 +341,11 @@ export function Menu({ lang, branch, categories, items, blocked, zones, acceptsD
               {delivery && zone && (
                 <div className="grid gap-1 text-sm">
                   <div className="flex justify-between"><span>{t.delivery.subtotal}</span><span className="num">{total} {t.egp}</span></div>
-                  <div className="flex justify-between"><span>{t.delivery.fee} ({pick(zone, lang)})</span><span className="num">{fee} {t.egp}</span></div>
+                  <div className="flex justify-between"><span>{t.delivery.fee}</span><span className="num">{fee} {t.egp}</span></div>
                 </div>
               )}
               <div className="totals"><span>{t.cart.total}</span><span className="num">{total + fee} {t.egp}</span></div>
-              {delivery && !zone && acceptsDelivery && <p className="alert">{t.delivery.chooseArea}</p>}
+              {tooFar && <p className="alert">{t.delivery.tooFar}</p>}
               {short > 0 && <p className="alert">{t.delivery.minOrder(zone!.min_order)} — {t.delivery.addMore(short)}</p>}
               {error && <p className="alert" role="alert">{t.errors[error]}</p>}
               <div className="grid gap-2">

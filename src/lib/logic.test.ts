@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { priceLines, type DbItem } from "./pricing";
-import { inPolygon, matchZone, type Pt } from "./geo";
+import { distanceKm, nearestBranch } from "./geo";
 import { isOpenAt } from "./hours";
 
 const strips: DbItem = {
@@ -46,16 +46,15 @@ describe("isOpenAt (Africa/Cairo, crossing midnight)", () => {
 });
 
 
-describe("zone matching", () => {
-  // rough square around Smouha, Alexandria
-  const smouha: Pt[] = [[31.20, 29.93], [31.20, 29.96], [31.22, 29.96], [31.22, 29.93]];
-  it("point in polygon", () => {
-    expect(inPolygon([31.21, 29.945], smouha)).toBe(true);
-    expect(inPolygon([31.25, 29.945], smouha)).toBe(false);
+describe("delivery by distance", () => {
+  const smouha = { slug: "smouha", lat: 31.2065, lng: 29.95, maxKm: 7 };
+  const sidiBishr = { slug: "sidi-bishr", lat: 31.256, lng: 29.988, maxKm: 7 };
+  it("distance is about right", () => {
+    expect(distanceKm([31.2065, 29.95], [31.256, 29.988])).toBeCloseTo(6.5, 0); // Smouha to Sidi Bishr
   });
-  it("picks the zone that covers the pin, skips zones without a polygon", () => {
-    const zones = [{ id: "sample", polygon: null }, { id: "smouha", polygon: smouha }];
-    expect(matchZone([31.21, 29.945], zones)?.id).toBe("smouha");
-    expect(matchZone([30.04, 31.23], zones)).toBeUndefined(); // Cairo: no zone, offer pickup
+  it("picks the nearest branch in range, none when too far", () => {
+    expect(nearestBranch([31.25, 29.98], [smouha, sidiBishr])?.b.slug).toBe("sidi-bishr");
+    expect(nearestBranch([31.21, 29.94], [smouha, sidiBishr])?.b.slug).toBe("smouha");
+    expect(nearestBranch([30.04, 31.23], [smouha, sidiBishr])).toBeUndefined(); // Cairo: offer pickup
   });
 });

@@ -4,10 +4,10 @@ import { AppHead } from "@/components/AppHead";
 import { activeOrderCount, DELIVERY_TRAVEL_MIN, estimateMin, getBranch, getLang, publicDb } from "@/lib/db";
 import { fmtTime, isOpenAt } from "@/lib/hours";
 import { dict, pick } from "@/lib/i18n";
-import { Menu, type MenuItem, type Zone } from "./Menu";
+import { Menu, type Delivery, type MenuItem } from "./Menu";
 
 export default async function BranchPage({ params, searchParams }: PageProps<"/b/[branch]">) {
-  const [{ branch: slug }, { zone }] = await Promise.all([params, searchParams]);
+  const [{ branch: slug }, { mode }] = await Promise.all([params, searchParams]);
   const [lang, branch] = await Promise.all([getLang(), getBranch(slug)]);
   if (!branch) notFound();
   const t = dict[lang];
@@ -19,7 +19,7 @@ export default async function BranchPage({ params, searchParams }: PageProps<"/b
       .eq("active", true).order("sort"),
     db.from("branch_item_status").select("item_id").eq("branch_id", branch.id).eq("sold_out", true),
     activeOrderCount(branch.id),
-    db.from("delivery_zones").select("id, name_ar, name_en, fee, min_order").eq("branch_id", branch.id).eq("active", true).order("fee"),
+    db.from("delivery_zones").select("fee, min_order, max_km").eq("branch_id", branch.id).eq("active", true).order("fee"),
   ]);
   if (cats.error || items.error) throw cats.error ?? items.error;
   const out = new Set(soldOut.data?.map((s) => s.item_id));
@@ -46,8 +46,8 @@ export default async function BranchPage({ params, searchParams }: PageProps<"/b
       </AppHead>
       {blocked && <p className="banner" role="status">{blocked}</p>}
       <Menu lang={lang} branch={branch.slug} categories={cats.data} items={menu} blocked={!!blocked}
-        zones={(zones.data ?? []) as Zone[]} acceptsDelivery={branch.accepts_delivery} deliveryEta={wait + DELIVERY_TRAVEL_MIN}
-        initialZone={typeof zone === "string" ? zone : null} />
+        delivery={zones.data?.[0] ? { ...(zones.data[0] as Omit<Delivery, "branchPt" | "eta">), branchPt: branch.lat !== null && branch.lng !== null ? [branch.lat, branch.lng] : null, eta: wait + DELIVERY_TRAVEL_MIN } : null}
+        acceptsDelivery={branch.accepts_delivery} initialMode={mode === "delivery" ? "delivery" : "pickup"} />
     </div>
   );
 }

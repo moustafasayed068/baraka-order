@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { adminDb, getBranch, sameOrigin } from "@/lib/db";
+import { distanceKm } from "@/lib/geo";
 import { isOpenAt } from "@/lib/hours";
 import { priceLines, type DbItem } from "@/lib/pricing";
 import type { ErrorCode } from "@/lib/i18n";
@@ -29,7 +30,7 @@ const Common = z.object({
 });
 const Body = z.discriminatedUnion("type", [
   Common.extend({ type: z.literal("pickup") }),
-  Common.extend({ type: z.literal("delivery"), zoneId: z.uuid(), address: Address, pickupInMin: z.literal(0) }),
+  Common.extend({ type: z.literal("delivery"), address: Address, pickupInMin: z.literal(0) }),
 ]);
 
 const fail = (error: ErrorCode, status = 400, extra?: object) => NextResponse.json({ error, ...extra }, { status });
@@ -79,17 +80,24 @@ export async function POST(req: NextRequest) {
   if (!priced.ok) return priced.error === "bad_option" ? fail("invalid") : fail("item_unavailable", 409, { itemIds: [priced.itemId] });
   if (soldOut?.length) return fail("sold_out", 409, { itemIds: soldOut.map((s) => s.item_id) });
 
-  // Delivery: the zone must belong to this branch; fee and minimum come from the database
-  let fee = 0, needsCallConfirm = false;
+  // Delivery: fee, minimum and range come from the branch's delivery settings in the database
+  let fee = 0, zoneId: string | null = null, needsCallConfirm = false;
   if (b.type === "delivery") {
-    const [{ data: zone }, { count: delivered }] = await Promise.all([
-      db.from("delivery_zones").select("fee, min_order").eq("id", b.zoneId).eq("branch_id", branch.id).eq("active", true).maybeSingle(),
+    const [{ data: zones }, { count: delivered }] = await Promise.all([
+      db.from("delivery_zones").select("id, fee, min_order, max_km").eq("branch_id", branch.id).eq("active", true).order("fee"),
       db.from("orders").select("id", { count: "exact", head: true }).eq("customer_phone", b.phone).eq("type", "delivery").eq("status", "delivered"),
     ]);
-    if (!zone) return fail("zone_invalid", 409);
+    const { lat, lng } = b.address;
+    const pinned = lat !== null && lng !== null && branch.lat !== null && branch.lng !== null;
+    const km = pinned ? distanceKm([lat, lng], [branch.lat!, branch.lng!]) : 0;
+    const zone = zones?.find((z) => km <= Number(z.max_km)); // cheapest setting that reaches the pin
+    if (!zones?.length) return fail("zone_invalid", 409);
+    if (!zone) return fail("too_far", 409);
     if (priced.subtotal < zone.min_order) return fail("below_minimum", 409, { minOrder: zone.min_order });
     fee = zone.fee;
-    needsCallConfirm = !delivered; // first delivery from this phone: kitchen calls to confirm until SMS OTP (phase 2)
+    zoneId = zone.id;
+    // kitchen calls to confirm: first delivery from this phone (until SMS OTP, phase 2) or no location pin to check range
+    needsCallConfirm = !delivered || !pinned;
   }
 
   const { data, error } = await db.rpc("create_order", {
@@ -102,7 +110,7 @@ export async function POST(req: NextRequest) {
       subtotal: priced.subtotal,
       delivery_fee: fee,
       total: priced.subtotal + fee,
-      zone_id: b.type === "delivery" ? b.zoneId : null,
+      zone_id: zoneId,
       address: b.type === "delivery" ? b.address : null,
       needs_call_confirm: needsCallConfirm,
       pickup_in_min: b.pickupInMin,

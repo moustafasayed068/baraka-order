@@ -92,7 +92,7 @@ export function Tracker({ lang, token, initial }: { lang: Lang; token: string; i
 
       {o.address && (
         <div className="text-sm">
-          <b>{t.track.deliverTo}:</b> {o.zone && `${pick(o.zone, lang)} · `}{o.address.street}
+          <b>{t.track.deliverTo}:</b> {o.address.street}
           {o.address.building && ` · ${o.address.building}`}{o.address.floor && ` · ${o.address.floor}`}{o.address.apartment && ` · ${o.address.apartment}`}
           {o.address.landmark && <div className="text-muted">{o.address.landmark}</div>}
         </div>

@@ -1,15 +1,17 @@
-// Delivery zone matching. Polygons are stored as [[lat, lng], ...] on delivery_zones.polygon.
-export type Pt = [number, number];
+// Delivery by distance: the customer's pin picks the nearest branch that delivers that far.
+export type Pt = [number, number]; // [lat, lng]
 
-// Ray casting; fine for city-sized zones (no antimeridian or pole cases in Egypt).
-export function inPolygon([lat, lng]: Pt, poly: Pt[]): boolean {
-  let inside = false;
-  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
-    const [ai, oi] = poly[i], [aj, oj] = poly[j];
-    if (oi > lng !== oj > lng && lat < ((aj - ai) * (lng - oi)) / (oj - oi) + ai) inside = !inside;
-  }
-  return inside;
+// Great-circle distance (haversine). Straight line, so real road distance is a bit longer.
+export function distanceKm([lat1, lng1]: Pt, [lat2, lng2]: Pt): number {
+  const rad = Math.PI / 180;
+  const a = Math.sin(((lat2 - lat1) * rad) / 2) ** 2 + Math.cos(lat1 * rad) * Math.cos(lat2 * rad) * Math.sin(((lng2 - lng1) * rad) / 2) ** 2;
+  return 2 * 6371 * Math.asin(Math.sqrt(a));
 }
 
-export const matchZone = <Z extends { polygon: Pt[] | null }>(p: Pt, zones: Z[]) =>
-  zones.find((z) => z.polygon && z.polygon.length >= 3 && inPolygon(p, z.polygon));
+export function nearestBranch<B extends { lat: number | null; lng: number | null; maxKm: number }>(p: Pt, branches: B[]) {
+  return branches
+    .filter((b) => b.lat !== null && b.lng !== null)
+    .map((b) => ({ b, km: distanceKm(p, [b.lat!, b.lng!]) }))
+    .filter((x) => x.km <= x.b.maxKm)
+    .sort((x, y) => x.km - y.km)[0];
+}

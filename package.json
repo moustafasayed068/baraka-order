@@ -10,7 +10,8 @@
     "test": "vitest run --project unit",
     "db:start": "supabase start",
     "db:reset": "supabase db reset",
-    "test:rls": "node --env-file=.env.local node_modules/vitest/vitest.mjs run --project rls"
+    "test:rls": "node --env-file=.env.local node_modules/vitest/vitest.mjs run --project rls",
+    "dev:https": "bash scripts/dev-cert.sh && next dev -H 0.0.0.0 --experimental-https --experimental-https-key certs/key.pem --experimental-https-cert certs/cert.pem"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.117.2",
