@@ -63,7 +63,7 @@ button:focus-visible, input:focus-visible, a:focus-visible { outline: 3px solid 
 .cartbar .count { background: var(--color-yellow); color: var(--color-ink); border-radius: 999px; padding: 1px 9px; margin-inline-end: 8px; }
 
 .sheet-bg { position: fixed; inset: 0; background: rgba(30,10,8,.45); z-index: 50; display: flex; align-items: flex-end; justify-content: center; }
-.sheet { background: #fff; width: 100%; max-width: 480px; border-radius: 22px 22px 0 0; padding: 18px 16px calc(16px + env(safe-area-inset-bottom)); max-height: 92dvh; overflow: auto; }
+.sheet { background: #fff; color: var(--color-ink); width: 100%; max-width: 480px; border-radius: 22px 22px 0 0; padding: 18px 16px calc(16px + env(safe-area-inset-bottom)); max-height: 92dvh; overflow: auto; }
 .sheet h3 { font-family: var(--font-display); font-weight: 400; font-size: 26px; margin: 0 0 4px; color: var(--color-red); }
 .opt-group { margin: 14px 0; }
 .opt-group h4 { margin: 0 0 8px; font-size: 13px; color: var(--color-muted); font-weight: 600; }
@@ -114,7 +114,7 @@ button:focus-visible, input:focus-visible, a:focus-visible { outline: 3px solid 
 
 /* ---------- staff screens (kitchen tablet, pickup TV): dark, large type ---------- */
 .night { min-height: 100dvh; background: var(--color-night); color: var(--color-night-ink); }
-.night-input { min-height: 52px; border-radius: 12px; border: 1px solid var(--color-night-line); background: var(--color-night); color: var(--color-night-ink); padding: 0 12px; font-size: 18px; }
+.night-input { width: 100%; min-width: 0; min-height: 52px; border-radius: 12px; border: 1px solid var(--color-night-line); background: var(--color-night); color: var(--color-night-ink); padding: 0 12px; font-size: 18px; }
 .staff-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; padding: 12px 16px; background: var(--color-red); }
 .staff-bar h1 { font-family: var(--font-display); font-size: 30px; line-height: 1; color: var(--color-yellow); }
 .tbtn { min-height: 44px; padding: 0 14px; border-radius: 10px; background: var(--color-night-2); border: 1px solid var(--color-night-line); font-weight: 700; font-size: 14px; color: var(--color-night-ink); }
@@ -141,6 +141,8 @@ button:focus-visible, input:focus-visible, a:focus-visible { outline: 3px solid 
 .tk .go.quiet { background: transparent; color: var(--color-bad); border: 2px solid var(--color-bad); min-height: 44px; font-size: 15px; }
 .ktag { font-size: 12px; font-weight: 800; padding: 2px 9px; border-radius: 999px; background: #FFE9E4; color: var(--color-red-deep); }
 .ktag.dark { background: var(--color-ink); color: #fff; }
+.stock { min-width: 96px; min-height: 44px; padding: 0 14px; border-radius: 999px; font-weight: 800; font-size: 15px; background: #E7F6EC; color: var(--color-ok); border: 2px solid #BFE5CC; }
+.stock[aria-pressed="true"] { background: var(--color-bad); color: #fff; border-color: var(--color-bad); }
 .empty { color: #B79C95; font-size: 15px; padding: 24px 6px; text-align: center; }
 .sound-gate { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; background: rgba(26,15,14,.92); }
 .sound-gate button { font-size: 28px; font-weight: 800; padding: 28px 40px; border-radius: 20px; background: var(--color-yellow); color: var(--color-ink); }

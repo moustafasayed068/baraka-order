@@ -163,7 +163,7 @@ export function Board({ lang, branch, initial }: { lang: Lang; branch: DeviceBra
             {menu.map((r) => (
               <div key={r.id} className="line">
                 <b>{pick(r, lang)}</b>
-                <button type="button" className="chip" aria-pressed={r.sold_out} onClick={() => toggle(r)}>
+                <button type="button" className="stock" aria-pressed={r.sold_out} onClick={() => toggle(r)}>
                   {r.sold_out ? t.out : t.available}
                 </button>
               </div>
