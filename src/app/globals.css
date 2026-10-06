@@ -10,6 +10,12 @@
   --color-muted: #7A5A55;
   --color-line: #F0DCCB;
   --color-ok: #1F8A4C;
+  --color-warn: #E08A00;
+  --color-bad: #C62828;
+  --color-night: #1A0F0E;
+  --color-night-2: #2A1A18;
+  --color-night-line: #3D2925;
+  --color-night-ink: #FFF3E6;
   --font-display: var(--ff-lalezar), var(--ff-plex), system-ui, sans-serif;
   --font-body: var(--ff-plex), system-ui, -apple-system, "Segoe UI", Tahoma, sans-serif;
 }
@@ -105,5 +111,57 @@ button:focus-visible, input:focus-visible, a:focus-visible { outline: 3px solid 
 .branch-link small { display: block; color: var(--color-muted); font-size: 12.5px; }
 .my-orders { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-top: 10px; font-size: 12px; }
 .my-orders a { min-height: 36px; display: inline-flex; align-items: center; padding: 0 12px; border-radius: 999px; background: var(--color-yellow); color: var(--color-ink); font-weight: 700; }
+
+/* ---------- staff screens (kitchen tablet, pickup TV): dark, large type ---------- */
+.night { min-height: 100dvh; background: var(--color-night); color: var(--color-night-ink); }
+.night-input { min-height: 52px; border-radius: 12px; border: 1px solid var(--color-night-line); background: var(--color-night); color: var(--color-night-ink); padding: 0 12px; font-size: 18px; }
+.staff-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; padding: 12px 16px; background: var(--color-red); }
+.staff-bar h1 { font-family: var(--font-display); font-size: 30px; line-height: 1; color: var(--color-yellow); }
+.tbtn { min-height: 44px; padding: 0 14px; border-radius: 10px; background: var(--color-night-2); border: 1px solid var(--color-night-line); font-weight: 700; font-size: 14px; color: var(--color-night-ink); }
+.tbtn.hot { background: var(--color-yellow); color: var(--color-ink); border-color: var(--color-yellow); }
+.offline { background: var(--color-bad); color: #fff; font-weight: 700; text-align: center; padding: 10px; }
+.new-alert { width: 100%; background: var(--color-yellow); color: var(--color-ink); font-weight: 800; font-size: 22px; padding: 14px; animation: blink 1s steps(2) infinite; }
+@keyframes blink { 50% { opacity: .55; } }
+.cols { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; padding: 12px; align-items: start; }
+.col { background: var(--color-night-2); border-radius: 14px; padding: 10px; min-height: 60dvh; min-width: 0; }
+.col h2 { margin: 2px 4px 10px; font-size: 18px; font-weight: 800; display: flex; justify-content: space-between; }
+.col h2 b { background: var(--color-night); border-radius: 999px; padding: 0 12px; }
+.tk { background: var(--color-paper); color: var(--color-ink); border-radius: 12px; padding: 12px; margin-bottom: 10px; border-inline-start: 8px solid var(--color-ok); display: grid; gap: 8px; }
+.tk.warn { border-inline-start-color: var(--color-warn); }
+.tk.late { border-inline-start-color: var(--color-bad); }
+.tk .top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.tk .no { font-family: var(--font-display); font-size: 40px; line-height: 1; color: var(--color-red); }
+.tk .el { font-weight: 800; font-size: 16px; }
+.tk.warn .el { color: var(--color-warn); }
+.tk.late .el { color: var(--color-bad); }
+.tk ul { margin: 0; padding-inline-start: 18px; font-size: 17px; list-style: disc; }
+.tk .meta { font-size: 14px; color: var(--color-muted); display: flex; justify-content: space-between; gap: 6px; flex-wrap: wrap; font-weight: 600; }
+.tk .go { min-height: 52px; border-radius: 10px; background: var(--color-ink); color: #fff; font-weight: 800; font-size: 17px; }
+.tk .go.ok { background: var(--color-ok); }
+.tk .go.quiet { background: transparent; color: var(--color-bad); border: 2px solid var(--color-bad); min-height: 44px; font-size: 15px; }
+.ktag { font-size: 12px; font-weight: 800; padding: 2px 9px; border-radius: 999px; background: #FFE9E4; color: var(--color-red-deep); }
+.ktag.dark { background: var(--color-ink); color: #fff; }
+.empty { color: #B79C95; font-size: 15px; padding: 24px 6px; text-align: center; }
+.sound-gate { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; background: rgba(26,15,14,.92); }
+.sound-gate button { font-size: 28px; font-weight: 800; padding: 28px 40px; border-radius: 20px; background: var(--color-yellow); color: var(--color-ink); }
+.tv { min-height: 100dvh; display: grid; grid-template-rows: auto 1fr auto; background: var(--color-night); color: var(--color-night-ink); }
+.tv-head { background: var(--color-red); padding: 14px 24px; display: flex; justify-content: space-between; align-items: center; }
+.tv-head .wordmark { font-size: 48px; }
+.clock { font-family: var(--font-display); font-size: 40px; color: #fff; }
+.tv-cols { display: grid; grid-template-columns: 1fr 1.3fr; }
+.tv-col { padding: 20px 24px; }
+.tv-col + .tv-col { border-inline-start: 3px dashed var(--color-night-line); }
+.tv-col h2 { font-family: var(--font-display); font-size: 44px; line-height: 1.1; }
+.tv-col h2 small { display: block; font-family: var(--font-body); font-size: 18px; opacity: .7; }
+.nums { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 16px; }
+.nums span { font-family: var(--font-display); font-size: clamp(44px, 6vw, 72px); line-height: 1; padding: 12px 20px; border-radius: 16px; background: var(--color-night-2); min-width: 2.6em; text-align: center; }
+.tv-col.ready h2 { color: var(--color-yellow); }
+.tv-col.ready .nums span { background: var(--color-yellow); color: var(--color-ink); font-size: clamp(56px, 8vw, 96px); }
+.tv-col.ready .nums span.fresh { animation: pop 1.2s ease-in-out 4; }
+@keyframes pop { 50% { transform: scale(1.1); box-shadow: 0 0 0 10px rgba(255,199,44,.3); } }
+.tv-foot { background: var(--color-night-2); padding: 12px 24px; display: flex; justify-content: space-between; align-items: center; gap: 16px; font-size: 22px; font-weight: 700; }
+.tv-foot b { color: var(--color-yellow); }
+.tv-foot img { width: 110px; height: 110px; border-radius: 8px; background: #fff; padding: 6px; }
+@media (max-width: 860px) { .cols, .tv-cols { grid-template-columns: minmax(0, 1fr); } .col { min-height: 0; } .tv-col + .tv-col { border-inline-start: 0; border-top: 3px dashed var(--color-night-line); } }
 
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }

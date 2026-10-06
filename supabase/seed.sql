@@ -59,3 +59,6 @@ insert into delivery_zones (branch_id, name_ar, name_en, fee, min_order, is_samp
 select b.id, v.ar || ' (تجريبي)', v.en || ' (sample)', v.fee, v.min_order, true
 from branches b
 cross join (values ('المنطقة القريبة', 'Nearby area', 20, 150), ('المنطقة البعيدة', 'Farther area', 35, 200)) v(ar, en, fee, min_order);
+
+-- DEV ONLY: every branch PIN is 1234 for local testing. Real PINs are set per branch before launch.
+insert into branch_pins (branch_id, pin_hash) select id, extensions.crypt('1234', extensions.gen_salt('bf')) from branches;

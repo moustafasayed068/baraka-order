@@ -1,10 +1,9 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
-import { adminDb, getBranch } from "@/lib/db";
+import { adminDb, getBranch, sameOrigin } from "@/lib/db";
 import { isOpenAt } from "@/lib/hours";
 import { priceLines, type DbItem } from "@/lib/pricing";
 import type { ErrorCode } from "@/lib/i18n";
-
 import { PHONE_RE } from "@/lib/phone";
 
 const Body = z.object({
@@ -23,8 +22,7 @@ const fail = (error: ErrorCode, status = 400, extra?: object) => NextResponse.js
 
 export async function POST(req: NextRequest) {
   // CSRF: only accept requests from our own pages
-  const origin = req.headers.get("origin");
-  if (!origin || new URL(origin).host !== req.headers.get("host")) return fail("invalid", 403);
+  if (!sameOrigin(req)) return fail("invalid", 403);
 
   const parsed = Body.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return fail("invalid");
