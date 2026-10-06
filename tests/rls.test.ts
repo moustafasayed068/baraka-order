@@ -138,6 +138,26 @@ describe("menu photos", () => {
   });
 });
 
+describe("cash handovers and dashboard", () => {
+  it("manager records a handover for an own-branch rider; nobody can change it afterwards", async () => {
+    const { data: rider } = await admin.from("riders").select("id").eq("branch_id", bahary).limit(1).single();
+    const { data, error } = await manager.from("rider_handovers")
+      .insert({ rider_id: rider!.id, business_date: "2026-01-01", amount: 100, expected: 100 }).select("id").single();
+    expect(error).toBeNull();
+    expect((await manager.from("rider_handovers").update({ amount: 1 }).eq("id", data!.id)).error).not.toBeNull();
+    expect((await manager.from("rider_handovers").delete().eq("id", data!.id)).error).not.toBeNull();
+    const { data: other } = await admin.from("riders").select("id").eq("branch_id", smouha).limit(1).single();
+    expect((await manager.from("rider_handovers").insert({ rider_id: other!.id, business_date: "2026-01-01", amount: 1, expected: 1 })).error).not.toBeNull();
+    await admin.from("rider_handovers").delete().eq("id", data!.id);
+  });
+  it("dashboard only counts the manager's own branch", async () => {
+    const day = (await admin.from("orders").select("business_date").eq("id", baharyOrder).single()).data!.business_date;
+    const { data } = await manager.rpc("dashboard", { p_branch: null, p_from: day, p_to: day });
+    expect((data as { by_branch: { name_en: string }[] }).by_branch.map((b) => b.name_en)).toEqual(["Bahary"]);
+    expect((await anon.rpc("dashboard", { p_branch: null, p_from: day, p_to: day })).error).not.toBeNull();
+  });
+});
+
 describe("order numbers", () => {
   it("are unique per branch per day under concurrency", async () => {
     const ids = await Promise.all(Array.from({ length: 10 }, () => order(bahary)));
