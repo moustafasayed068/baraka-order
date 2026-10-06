@@ -6,10 +6,20 @@ import { priceLines, type DbItem } from "@/lib/pricing";
 import type { ErrorCode } from "@/lib/i18n";
 import { PHONE_RE } from "@/lib/phone";
 
-const Body = z.object({
+const text = (max: number) => z.string().trim().max(max);
+const Address = z.object({
+  street: z.string().trim().min(3).max(120),
+  building: text(40),
+  floor: text(10),
+  apartment: text(10),
+  landmark: text(120),
+  lat: z.number().min(-90).max(90).nullable(),
+  lng: z.number().min(-180).max(180).nullable(),
+});
+
+const Common = z.object({
   branch: z.string().regex(/^[a-z0-9-]{2,40}$/),
   idempotencyKey: z.uuid(),
-  type: z.literal("pickup"), // delivery arrives in build step 4
   name: z.string().trim().min(2).max(40),
   phone: z.string().regex(PHONE_RE),
   pickupInMin: z.union([z.literal(0), z.literal(15), z.literal(30)]),
@@ -17,6 +27,10 @@ const Body = z.object({
   website: z.string().max(0), // honeypot: real people never see this field
   fillMs: z.number().min(1500), // basic bot check: nobody fills a checkout in under 1.5 s
 });
+const Body = z.discriminatedUnion("type", [
+  Common.extend({ type: z.literal("pickup") }),
+  Common.extend({ type: z.literal("delivery"), zoneId: z.uuid(), address: Address, pickupInMin: z.literal(0) }),
+]);
 
 const fail = (error: ErrorCode, status = 400, extra?: object) => NextResponse.json({ error, ...extra }, { status });
 
@@ -37,6 +51,7 @@ export async function POST(req: NextRequest) {
   if (!branch) return fail("invalid");
   if (!branch.accepts_orders) return fail("paused", 409);
   if (!isOpenAt(branch.opens_at, branch.closes_at)) return fail("closed", 409);
+  if (b.type === "delivery" && !branch.accepts_delivery) return fail("delivery_paused", 409);
 
   const { data: customer } = await db.from("customers").select("blocked").eq("phone", b.phone).maybeSingle();
   if (customer?.blocked) return fail("blocked", 403);
@@ -64,6 +79,19 @@ export async function POST(req: NextRequest) {
   if (!priced.ok) return priced.error === "bad_option" ? fail("invalid") : fail("item_unavailable", 409, { itemIds: [priced.itemId] });
   if (soldOut?.length) return fail("sold_out", 409, { itemIds: soldOut.map((s) => s.item_id) });
 
+  // Delivery: the zone must belong to this branch; fee and minimum come from the database
+  let fee = 0, needsCallConfirm = false;
+  if (b.type === "delivery") {
+    const [{ data: zone }, { count: delivered }] = await Promise.all([
+      db.from("delivery_zones").select("fee, min_order").eq("id", b.zoneId).eq("branch_id", branch.id).eq("active", true).maybeSingle(),
+      db.from("orders").select("id", { count: "exact", head: true }).eq("customer_phone", b.phone).eq("type", "delivery").eq("status", "delivered"),
+    ]);
+    if (!zone) return fail("zone_invalid", 409);
+    if (priced.subtotal < zone.min_order) return fail("below_minimum", 409, { minOrder: zone.min_order });
+    fee = zone.fee;
+    needsCallConfirm = !delivered; // first delivery from this phone: kitchen calls to confirm until SMS OTP (phase 2)
+  }
+
   const { data, error } = await db.rpc("create_order", {
     p_order: {
       branch_id: branch.id,
@@ -72,8 +100,11 @@ export async function POST(req: NextRequest) {
       customer_name: b.name,
       customer_phone: b.phone,
       subtotal: priced.subtotal,
-      delivery_fee: 0,
-      total: priced.subtotal,
+      delivery_fee: fee,
+      total: priced.subtotal + fee,
+      zone_id: b.type === "delivery" ? b.zoneId : null,
+      address: b.type === "delivery" ? b.address : null,
+      needs_call_confirm: needsCallConfirm,
       pickup_in_min: b.pickupInMin,
       client_ip: ip,
     },

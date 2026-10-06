@@ -5,7 +5,7 @@ import type { DeviceBranch, KitchenOrder } from "@/lib/db";
 import { dict, pick, type Lang } from "@/lib/i18n";
 import { useBranchLive, useSound, useWakeLock } from "@/lib/staff-client";
 
-type Action = "start" | "ready" | "collected" | "not_collected";
+type Action = "start" | "ready" | "collected" | "not_collected" | "dispatch";
 type MenuRow = { id: string; name_ar: string; name_en: string; sold_out: boolean };
 
 const NO_SHOW_MIN = 30;
@@ -100,7 +100,7 @@ export function Board({ lang, branch, initial }: { lang: Lang; branch: DeviceBra
       o.status === "received" ? ["start", t.start, ""]
       : o.status === "preparing" ? ["ready", t.markReady, "ok"]
       : o.type === "pickup" ? ["collected", t.collected, ""]
-      : null; // delivery: rider assignment arrives in build step 5
+      : ["dispatch", t.dispatch, ""];
     return (
       <article key={o.id} className={`tk ${cls}`}>
         <div className="top">
@@ -111,7 +111,8 @@ export function Board({ lang, branch, initial }: { lang: Lang; branch: DeviceBra
           <b className="text-lg">{o.first_name}</b>
           <span className={`ktag ${o.type === "delivery" ? "dark" : ""}`}>{o.type === "pickup" ? t.pickup : t.delivery}</span>
           {o.pickup_in_min > 0 && <span className="ktag">{t.inMin(o.pickup_in_min)}</span>}
-          {o.needs_call_confirm && <span className="ktag dark">{t.callConfirm}</span>}
+          {o.zone && <span className="ktag">{pick(o.zone, lang)}</span>}
+          {o.needs_call_confirm && <span className="ktag dark">📞 {t.callConfirm}</span>}
         </div>
         <ul>
           {o.items.map((l, i) => (

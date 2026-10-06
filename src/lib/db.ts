@@ -22,17 +22,19 @@ export const ACTIVE_STATUSES = ["received", "preparing"] as const;
 
 // ponytail: flat estimate, replace with measured average prep time per branch once orders exist
 export const estimateMin = (ahead: number, extraWait: number) => 8 + 2 * ahead + extraWait;
+// ponytail: flat ride time for every zone; add an eta column to delivery_zones when real zones are known
+export const DELIVERY_TRAVEL_MIN = 25;
 
 export type Branch = {
   id: string; slug: string; name_ar: string; name_en: string; city: "alexandria" | "cairo";
   address_ar: string; address_en: string; opens_at: string; closes_at: string;
-  accepts_orders: boolean; extra_wait_min: number;
+  accepts_orders: boolean; accepts_delivery: boolean; extra_wait_min: number;
 };
 
 export async function getBranch(slug: string) {
   const { data } = await publicDb()
     .from("branches")
-    .select("id, slug, name_ar, name_en, city, address_ar, address_en, opens_at, closes_at, accepts_orders, extra_wait_min")
+    .select("id, slug, name_ar, name_en, city, address_ar, address_en, opens_at, closes_at, accepts_orders, accepts_delivery, extra_wait_min")
     .eq("slug", slug)
     .maybeSingle();
   return data as Branch | null;
@@ -50,7 +52,10 @@ export async function activeOrderCount(branchId: string) {
 
 export type Tracking = {
   number: number; status: string; type: string; total: number; pickup_in_min: number; created_at: string;
-  customer_name: string; ahead: number; eta: number;
+  customer_name: string; ahead: number; eta: number; delivery_fee: number;
+  address: { street: string; building: string; floor: string; apartment: string; landmark: string } | null;
+  zone: { name_ar: string; name_en: string } | null;
+  rider: { name: string; phone: string } | null;
   branch: { id: string; slug: string; name_ar: string; name_en: string; address_ar: string; address_en: string };
   items: { name_ar: string; name_en: string; option_ar: string | null; option_en: string | null; qty: number }[];
 };
@@ -61,7 +66,7 @@ export async function getTracking(token: string): Promise<Tracking | null> {
   const db = adminDb();
   const { data: o } = await db
     .from("orders")
-    .select("id, branch_id, number, status, type, total, pickup_in_min, created_at, customer_name, branches(id, slug, name_ar, name_en, address_ar, address_en, extra_wait_min), order_items(name_ar, name_en, option_ar, option_en, qty)")
+    .select("id, branch_id, number, status, type, total, delivery_fee, address, pickup_in_min, created_at, customer_name, delivery_zones(name_ar, name_en), riders(name, phone), branches(id, slug, name_ar, name_en, address_ar, address_en, extra_wait_min), order_items(name_ar, name_en, option_ar, option_en, qty)")
     .eq("tracking_token", token)
     .maybeSingle();
   if (!o) return null;
@@ -75,7 +80,12 @@ export async function getTracking(token: string): Promise<Tracking | null> {
   return {
     number: o.number, status: o.status, type: o.type, total: o.total, pickup_in_min: o.pickup_in_min, created_at: o.created_at,
     customer_name: o.customer_name.split(" ")[0], ahead,
-    eta: Math.max(estimateMin(ahead, branch.extra_wait_min), o.pickup_in_min),
+    eta: Math.max(estimateMin(ahead, branch.extra_wait_min), o.pickup_in_min) + (o.type === "delivery" ? DELIVERY_TRAVEL_MIN : 0),
+    delivery_fee: o.delivery_fee,
+    address: o.address,
+    zone: o.delivery_zones as unknown as Tracking["zone"],
+    // rider name and phone only once the order is out, so the customer can call them
+    rider: o.status === "out_for_delivery" ? (o.riders as unknown as Tracking["rider"]) : null,
     branch: { id: branch.id, slug: branch.slug, name_ar: branch.name_ar, name_en: branch.name_en, address_ar: branch.address_ar, address_en: branch.address_en },
     items: o.order_items,
   };
@@ -107,6 +117,7 @@ export async function getDevice(kind: DeviceKind) {
 export type KitchenOrder = {
   id: string; number: number; first_name: string; type: "pickup" | "delivery"; status: string; total: number;
   payment_status: string; pickup_in_min: number; created_at: string; ready_at: string | null; needs_call_confirm: boolean;
+  zone: { name_ar: string; name_en: string } | null;
   items: { qty: number; name_ar: string; name_en: string; option_ar: string | null; option_en: string | null }[];
 };
 
@@ -114,12 +125,14 @@ export type KitchenOrder = {
 export async function kitchenOrders(branchId: string): Promise<KitchenOrder[]> {
   const { data, error } = await adminDb()
     .from("orders")
-    .select("id, number, customer_name, type, status, total, payment_status, pickup_in_min, created_at, ready_at, needs_call_confirm, order_items(qty, name_ar, name_en, option_ar, option_en)")
+    .select("id, number, customer_name, type, status, total, payment_status, pickup_in_min, created_at, ready_at, needs_call_confirm, zone:delivery_zones(name_ar, name_en), order_items(qty, name_ar, name_en, option_ar, option_en)")
     .eq("branch_id", branchId)
     .in("status", ["received", "preparing", "ready"])
     .order("created_at");
   if (error) throw error;
-  return data.map(({ customer_name, order_items, ...o }) => ({ ...o, first_name: customer_name.split(" ")[0], items: order_items }));
+  return data.map(({ customer_name, order_items, zone, ...o }) => ({
+    ...o, first_name: customer_name.split(" ")[0], items: order_items, zone: zone as unknown as KitchenOrder["zone"],
+  }));
 }
 
 // TV screen: pickup order numbers only.

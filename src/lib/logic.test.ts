@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { priceLines, type DbItem } from "./pricing";
+import { inPolygon, matchZone, type Pt } from "./geo";
 import { isOpenAt } from "./hours";
 
 const strips: DbItem = {
@@ -41,5 +42,20 @@ describe("isOpenAt (Africa/Cairo, crossing midnight)", () => {
   it("same-day hours", () => {
     expect(isOpenAt("10:00", "22:00", at("08:00"))).toBe(true); // 11:00
     expect(isOpenAt("10:00", "22:00", at("19:00"))).toBe(false); // 22:00
+  });
+});
+
+
+describe("zone matching", () => {
+  // rough square around Smouha, Alexandria
+  const smouha: Pt[] = [[31.20, 29.93], [31.20, 29.96], [31.22, 29.96], [31.22, 29.93]];
+  it("point in polygon", () => {
+    expect(inPolygon([31.21, 29.945], smouha)).toBe(true);
+    expect(inPolygon([31.25, 29.945], smouha)).toBe(false);
+  });
+  it("picks the zone that covers the pin, skips zones without a polygon", () => {
+    const zones = [{ id: "sample", polygon: null }, { id: "smouha", polygon: smouha }];
+    expect(matchZone([31.21, 29.945], zones)?.id).toBe("smouha");
+    expect(matchZone([30.04, 31.23], zones)).toBeUndefined(); // Cairo: no zone, offer pickup
   });
 });

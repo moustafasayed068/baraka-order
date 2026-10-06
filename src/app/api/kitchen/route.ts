@@ -16,8 +16,10 @@ const MOVES = {
   ready: ["preparing", "ready", null],
   collected: ["ready", "collected", "pickup"],
   not_collected: ["ready", "not_collected", "pickup"],
+  // ponytail: kitchen hands delivery orders out until rider assignment exists (build step 5)
+  dispatch: ["ready", "out_for_delivery", "delivery"],
 } as const;
-const Body = z.object({ orderId: z.uuid(), action: z.enum(["start", "ready", "collected", "not_collected"]) });
+const Body = z.object({ orderId: z.uuid(), action: z.enum(["start", "ready", "collected", "not_collected", "dispatch"]) });
 
 // Kitchen can only move orders of its own branch one step forward; it never touches money fields.
 export async function POST(req: NextRequest) {

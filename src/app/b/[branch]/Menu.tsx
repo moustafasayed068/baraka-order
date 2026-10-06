@@ -12,13 +12,18 @@ export type MenuItem = {
 };
 type Category = { id: string; slug: string; name_ar: string; name_en: string };
 type Line = { itemId: string; optionId: string | null; qty: number };
+export type Zone = { id: string; name_ar: string; name_en: string; fee: number; min_order: number };
+type Address = { street: string; building: string; floor: string; apartment: string; landmark: string; lat: number | null; lng: number | null };
+type Saved = Partial<Record<"home" | "work", Address>>;
+const EMPTY_ADDR: Address = { street: "", building: "", floor: "", apartment: "", landmark: "", lat: null, lng: null };
 type Sheet = null | { kind: "cart" } | { kind: "item"; item: MenuItem; optionId: string | null; qty: number };
 
 const MAX_QTY = 20;
 const unitPrice = (i: MenuItem, optionId: string | null) => i.base_price + (i.options.find((o) => o.id === optionId)?.price_delta ?? 0);
 
-export function Menu({ lang, branch, categories, items, blocked }: {
+export function Menu({ lang, branch, categories, items, blocked, zones, acceptsDelivery, deliveryEta, initialZone }: {
   lang: Lang; branch: string; categories: Category[]; items: MenuItem[]; blocked: boolean;
+  zones: Zone[]; acceptsDelivery: boolean; deliveryEta: number; initialZone: string | null;
 }) {
   const t = dict[lang];
   const router = useRouter();
@@ -28,6 +33,12 @@ export function Menu({ lang, branch, categories, items, blocked }: {
   const [cart, setCart] = useState<Line[]>([]);
   const [me, setMe] = useState({ name: "", phone: "" });
   const [pickupInMin, setPickupInMin] = useState<0 | 15 | 30>(0);
+  const [mode, setMode] = useState<"pickup" | "delivery">(initialZone ? "delivery" : "pickup");
+  const [zoneId, setZoneId] = useState(zones.some((z) => z.id === initialZone) ? initialZone! : "");
+  const [addr, setAddr] = useState<Address>(EMPTY_ADDR);
+  const [saved, setSaved] = useState<Saved>({});
+  const [saveAs, setSaveAs] = useState<"home" | "work" | null>(null);
+  const [gpsMsg, setGpsMsg] = useState<string | null>(null);
   const [phoneTouched, setPhoneTouched] = useState(false);
   const [bad, setBad] = useState<Set<string>>(new Set()); // items the server rejected (sold out mid-cart)
   const [error, setError] = useState<ErrorCode | null>(null);
@@ -43,6 +54,9 @@ export function Menu({ lang, branch, categories, items, blocked }: {
     /* eslint-disable react-hooks/set-state-in-effect */
     setCart(store.get<Line[]>(`bk_cart_${branch}`, []).filter((l) => byId.has(l.itemId)));
     setMe(store.get("bk_me", { name: "", phone: "" }));
+    const s = store.get<Saved>("bk_addr", {});
+    setSaved(s);
+    setAddr(s.home ?? s.work ?? EMPTY_ADDR);
     /* eslint-enable react-hooks/set-state-in-effect */
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [branch]);
@@ -69,7 +83,32 @@ export function Menu({ lang, branch, categories, items, blocked }: {
   const phoneOk = PHONE_RE.test(phone);
   const nameOk = me.name.trim().length >= 2;
   const hasBad = lines.some((l) => isOut(l.itemId));
-  const canSend = !blocked && !sending && lines.length > 0 && nameOk && phoneOk && !hasBad;
+  const delivery = mode === "delivery";
+  const zone = zones.find((z) => z.id === zoneId);
+  const fee = delivery && zone ? zone.fee : 0;
+  const short = delivery && zone ? Math.max(0, zone.min_order - total) : 0;
+  const deliveryOk = !delivery || (acceptsDelivery && !!zone && short === 0 && addr.street.trim().length >= 3);
+  const canSend = !blocked && !sending && lines.length > 0 && nameOk && phoneOk && !hasBad && deliveryOk;
+
+  // keep the choice in the URL so a delivery link can be shared or reopened
+  function chooseMode(m: "pickup" | "delivery") {
+    setMode(m);
+    history.replaceState(null, "", m === "delivery" && zoneId ? `?zone=${zoneId}` : location.pathname);
+  }
+  function chooseZone(id: string) {
+    setZoneId(id);
+    history.replaceState(null, "", id ? `?zone=${id}` : location.pathname);
+  }
+  function pin() {
+    setGpsMsg(null);
+    if (!navigator.geolocation) return setGpsMsg(t.delivery.gpsFail);
+    navigator.geolocation.getCurrentPosition(
+      (p) => setAddr((a) => ({ ...a, lat: +p.coords.latitude.toFixed(6), lng: +p.coords.longitude.toFixed(6) })),
+      () => setGpsMsg(t.delivery.gpsFail),
+      { enableHighAccuracy: true, timeout: 10_000 },
+    );
+  }
+  const setField = (k: keyof Address) => (e: React.ChangeEvent<HTMLInputElement>) => setAddr({ ...addr, [k]: e.target.value });
 
   async function place() {
     if (!canSend) return;
@@ -81,7 +120,8 @@ export function Menu({ lang, branch, categories, items, blocked }: {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          branch, idempotencyKey: idemKey.current, type: "pickup", name: me.name.trim(), phone, pickupInMin,
+          branch, idempotencyKey: idemKey.current, type: mode, name: me.name.trim(), phone,
+          ...(delivery ? { pickupInMin: 0, zoneId, address: addr } : { pickupInMin }),
           lines: lines.map(({ itemId, optionId, qty }) => ({ itemId, optionId, qty })),
           website: honeypot.current?.value ?? "", fillMs: elapsed(mountedAt.current),
         }),
@@ -93,6 +133,7 @@ export function Menu({ lang, branch, categories, items, blocked }: {
         return;
       }
       saveOrder({ token: data.token, number: data.number, branch });
+      if (delivery && saveAs) store.set("bk_addr", { ...saved, [saveAs]: addr });
       setCart([]);
       store.set(`bk_cart_${branch}`, []);
       router.push(`/t/${data.token}`);
@@ -108,6 +149,32 @@ export function Menu({ lang, branch, categories, items, blocked }: {
 
   return (
     <>
+      <div className="px-3.5 pt-3">
+        <div className="seg" role="group">
+          <button type="button" aria-pressed={!delivery} onClick={() => chooseMode("pickup")}>{t.delivery.pickup}</button>
+          <button type="button" aria-pressed={delivery} onClick={() => chooseMode("delivery")}>{t.delivery.delivery}</button>
+        </div>
+        {delivery && (!acceptsDelivery || zones.length === 0 ? (
+          <div className="banner mx-0! mb-0!">
+            {acceptsDelivery ? t.delivery.noZones : t.delivery.paused}
+            <button type="button" className="btn alt mt-2" onClick={() => chooseMode("pickup")}>{t.delivery.usePickup}</button>
+          </div>
+        ) : (
+          <div className="field mb-0!">
+            <label htmlFor="f-zone">{t.delivery.chooseArea}</label>
+            <select id="f-zone" className="select" value={zoneId} onChange={(e) => chooseZone(e.target.value)}>
+              <option value="">{t.delivery.areaPh}</option>
+              {zones.map((z) => <option key={z.id} value={z.id}>{pick(z, lang)} · {t.delivery.fee} {z.fee} {t.egp}</option>)}
+            </select>
+            {zone && (
+              <span className="text-sm text-muted num">
+                {t.delivery.fee} {zone.fee} {t.egp} · {t.delivery.minOrder(zone.min_order)} · {t.delivery.eta(deliveryEta)}
+              </span>
+            )}
+          </div>
+        ))}
+      </div>
+
       <nav className="cats" aria-label="menu">
         {categories.map((c) => (
           <button key={c.id} type="button" aria-pressed={cat === c.id} onClick={() => setCat(c.id)}>{pick(c, lang)}</button>
@@ -225,27 +292,71 @@ export function Menu({ lang, branch, categories, items, blocked }: {
                   onChange={(e) => setMe({ ...me, phone: e.target.value })} onBlur={() => setPhoneTouched(true)} />
                 {phoneTouched && !phoneOk && <span id="phone-err" className="err">{t.cart.phoneBad}</span>}
               </div>
+              {delivery && (
+                <fieldset className="opt-group">
+                  <h4>{t.delivery.address}{zone && <> · {pick(zone, lang)}</>}</h4>
+                  {(saved.home || saved.work) && (
+                    <div className="chips mb-2" aria-label={t.delivery.saved}>
+                      {(["home", "work"] as const).map((k) => saved[k] && (
+                        <button key={k} type="button" className="chip" onClick={() => setAddr(saved[k]!)}>{t.delivery[k]}</button>
+                      ))}
+                    </div>
+                  )}
+                  <div className="field">
+                    <label htmlFor="f-street">{t.delivery.street}</label>
+                    <input id="f-street" autoComplete="street-address" maxLength={120} value={addr.street} onChange={setField("street")} />
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="field my-0!"><label htmlFor="f-bld">{t.delivery.building}</label><input id="f-bld" maxLength={40} value={addr.building} onChange={setField("building")} /></div>
+                    <div className="field my-0!"><label htmlFor="f-floor">{t.delivery.floor}</label><input id="f-floor" maxLength={10} value={addr.floor} onChange={setField("floor")} /></div>
+                    <div className="field my-0!"><label htmlFor="f-apt">{t.delivery.apartment}</label><input id="f-apt" maxLength={10} value={addr.apartment} onChange={setField("apartment")} /></div>
+                  </div>
+                  <div className="field">
+                    <label htmlFor="f-landmark">{t.delivery.landmark}</label>
+                    <input id="f-landmark" maxLength={120} placeholder={t.delivery.landmarkPh} value={addr.landmark} onChange={setField("landmark")} />
+                  </div>
+                  <button type="button" className="chip w-full" onClick={pin}>{addr.lat !== null ? t.delivery.pinSet : t.delivery.pinAdd}</button>
+                  {gpsMsg && <p className="err mt-1">{gpsMsg}</p>}
+                  <h4 className="mt-3">{t.delivery.saveAs}</h4>
+                  <div className="chips">
+                    {([["home", t.delivery.home], ["work", t.delivery.work], [null, t.delivery.noSave]] as const).map(([k, label]) => (
+                      <button key={label} type="button" className="chip" aria-pressed={saveAs === k} onClick={() => setSaveAs(k)}>{label}</button>
+                    ))}
+                  </div>
+                </fieldset>
+              )}
+
               <div className="hp" aria-hidden="true">
                 <label>Website <input ref={honeypot} name="website" tabIndex={-1} autoComplete="off" /></label>
               </div>
 
-              <div className="opt-group">
-                <h4>{t.cart.pickupTime}</h4>
-                <div className="chips">
-                  {([[0, t.cart.asap], [15, t.cart.in15], [30, t.cart.in30]] as const).map(([v, label]) => (
-                    <button key={v} type="button" className="chip" aria-pressed={pickupInMin === v} onClick={() => setPickupInMin(v)}>{label}</button>
-                  ))}
+              {!delivery && (
+                <div className="opt-group">
+                  <h4>{t.cart.pickupTime}</h4>
+                  <div className="chips">
+                    {([[0, t.cart.asap], [15, t.cart.in15], [30, t.cart.in30]] as const).map(([v, label]) => (
+                      <button key={v} type="button" className="chip" aria-pressed={pickupInMin === v} onClick={() => setPickupInMin(v)}>{label}</button>
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )}
               <div className="opt-group">
                 <h4>{t.cart.payment}</h4>
                 <div className="chips">
-                  <button type="button" className="chip" aria-pressed="true">{t.cart.payAtPickup}</button>
+                  <button type="button" className="chip" aria-pressed="true">{delivery ? t.delivery.payCod : t.cart.payAtPickup}</button>
                   <button type="button" className="chip" disabled>{t.cart.onlineSoon}</button>
                 </div>
               </div>
 
-              <div className="totals"><span>{t.cart.total}</span><span className="num">{total} {t.egp}</span></div>
+              {delivery && zone && (
+                <div className="grid gap-1 text-sm">
+                  <div className="flex justify-between"><span>{t.delivery.subtotal}</span><span className="num">{total} {t.egp}</span></div>
+                  <div className="flex justify-between"><span>{t.delivery.fee} ({pick(zone, lang)})</span><span className="num">{fee} {t.egp}</span></div>
+                </div>
+              )}
+              <div className="totals"><span>{t.cart.total}</span><span className="num">{total + fee} {t.egp}</span></div>
+              {delivery && !zone && acceptsDelivery && <p className="alert">{t.delivery.chooseArea}</p>}
+              {short > 0 && <p className="alert">{t.delivery.minOrder(zone!.min_order)} — {t.delivery.addMore(short)}</p>}
               {error && <p className="alert" role="alert">{t.errors[error]}</p>}
               <div className="grid gap-2">
                 <button type="submit" className="btn" disabled={!canSend}>{sending ? t.cart.placing : t.cart.place}</button>

@@ -7,6 +7,7 @@ import { dict, pick, type Lang, type OrderStatus } from "@/lib/i18n";
 
 const FINAL = ["collected", "delivered", "not_collected", "cancelled"];
 const STEP: Record<string, number> = { received: 0, preparing: 1, ready: 2, collected: 2 };
+const DELIVERY_STEP: Record<string, number> = { received: 0, preparing: 1, ready: 1, out_for_delivery: 2, delivered: 3 };
 
 function alertReady() {
   navigator.vibrate?.([300, 150, 300, 150, 600]);
@@ -33,9 +34,10 @@ export function Tracker({ lang, token, initial }: { lang: Lang; token: string; i
   useEffect(() => saveOrder({ token, number: initial.number, branch: initial.branch.slug, at: Date.parse(initial.created_at) }), [token, initial]);
 
   useEffect(() => {
-    if (prevStatus.current !== "ready" && o.status === "ready") alertReady();
+    const alertOn = o.type === "delivery" ? "out_for_delivery" : "ready"; // the moment the customer needs to act
+    if (prevStatus.current !== alertOn && o.status === alertOn) alertReady();
     prevStatus.current = o.status;
-  }, [o.status]);
+  }, [o.status, o.type]);
 
   // Realtime via broadcast topics keyed by the token (never the orders table); poll every 10 s if it drops.
   useEffect(() => {
@@ -59,8 +61,11 @@ export function Tracker({ lang, token, initial }: { lang: Lang; token: string; i
   }, [token, done, initial.branch.id]);
 
   const status = o.status as OrderStatus;
-  const step = STEP[o.status] ?? -1;
-  const waiting = o.status === "received" || o.status === "preparing";
+  const isDelivery = o.type === "delivery";
+  const steps = isDelivery ? t.track.deliverySteps : t.track.steps;
+  const step = (isDelivery ? DELIVERY_STEP : STEP)[o.status] ?? -1;
+  const waiting = o.status === "received" || o.status === "preparing" || (isDelivery && o.status === "ready");
+  const good = o.status === (isDelivery ? "delivered" : "ready") || o.status === "collected";
 
   return (
     <main className="track">
@@ -71,17 +76,27 @@ export function Tracker({ lang, token, initial }: { lang: Lang; token: string; i
         <div className="font-semibold">{o.customer_name} · <span className="num">{o.total} {t.egp}</span></div>
       </div>
 
-      <div className={`prog ${o.status === "ready" || o.status === "collected" ? "done" : ""}`}>
-        {t.track.steps.map((s, i) => <div key={s} className={i <= step ? "on" : ""}>{s}</div>)}
+      <div className={`prog ${good ? "done" : ""}`} style={{ gridTemplateColumns: `repeat(${steps.length}, 1fr)` }}>
+        {steps.map((s, i) => <div key={s} className={i <= step ? "on" : ""}>{s}</div>)}
       </div>
 
-      <div className={`status-card ${o.status === "ready" ? "ready" : ""}`} role="status" aria-live="polite">
-        <div className="s">{t.track.st[status]}</div>
+      <div className={`status-card ${o.status === "ready" || o.status === "out_for_delivery" ? "ready" : ""}`} role="status" aria-live="polite">
+        <div className="s">{isDelivery && o.status === "ready" ? t.track.st.preparing : t.track.st[status]}</div>
         {waiting && <><div className="num">{t.track.ahead(o.ahead)}</div><div className="num">{t.track.eta(o.eta)}</div></>}
-        {o.status === "ready" && <div>{t.track.showNo}</div>}
-        {!done && <div className="text-sm text-muted">{t.track.payCash(o.total)}</div>}
+        {o.status === "ready" && !isDelivery && <div>{t.track.showNo}</div>}
+        {o.rider && (
+          <a href={`tel:${o.rider.phone}`} className="btn yellow mt-1">📞 {t.track.callRider}: {o.rider.name}</a>
+        )}
+        {!done && <div className="text-sm text-muted">{isDelivery ? t.track.payCod(o.total) : t.track.payCash(o.total)}</div>}
       </div>
 
+      {o.address && (
+        <div className="text-sm">
+          <b>{t.track.deliverTo}:</b> {o.zone && `${pick(o.zone, lang)} · `}{o.address.street}
+          {o.address.building && ` · ${o.address.building}`}{o.address.floor && ` · ${o.address.floor}`}{o.address.apartment && ` · ${o.address.apartment}`}
+          {o.address.landmark && <div className="text-muted">{o.address.landmark}</div>}
+        </div>
+      )}
       <div className="text-sm">
         <b>{t.track.branch}:</b> {pick(o.branch, lang)} · {lang === "ar" ? o.branch.address_ar : o.branch.address_en}
       </div>
