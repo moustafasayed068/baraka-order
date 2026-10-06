@@ -60,7 +60,7 @@ describe("anonymous customer", () => {
     expect((await anon.from("delivery_zones").select("id")).data!.length).toBeGreaterThan(0);
   });
   it("cannot read orders, items, customers, staff or audit", async () => {
-    for (const t of ["orders", "order_items", "customers", "addresses", "staff", "audit_log", "order_counters", "branch_pins", "devices"]) {
+    for (const t of ["orders", "order_items", "customers", "addresses", "staff", "audit_log", "order_counters", "branch_pins", "devices", "rider_sessions"]) {
       const { data } = await anon.from(t).select("*");
       expect(data ?? [], t).toEqual([]);
     }
@@ -71,6 +71,7 @@ describe("anonymous customer", () => {
     expect((await anon.rpc("create_order", { p_order: {}, p_items: [] })).error).not.toBeNull();
     expect((await anon.rpc("next_order_number", { p_branch: bahary })).error).not.toBeNull();
     expect((await anon.rpc("pair_device", { p_slug: "bahary", p_pin: "1234", p_kind: "kitchen" })).error).not.toBeNull();
+    expect((await anon.rpc("rider_login", { p_phone: "01000000101", p_pin: "1234" })).error).not.toBeNull();
     const { data } = await anon.from("menu_items").update({ base_price: 1 }).eq("id", water).select();
     expect(data ?? []).toEqual([]);
   });

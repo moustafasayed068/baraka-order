@@ -1,10 +1,18 @@
 "use client";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
+// Local dev: Supabase runs on this PC, so a phone must reach it via the same host it opened the site on
+// (the LAN IP can change after a reboot). Real deployments use the configured URL unchanged.
+export function devHost(url: string, host: string) {
+  const u = new URL(url);
+  if (u.hostname === "127.0.0.1" || u.hostname === "localhost") u.hostname = host;
+  return u.origin;
+}
+
 // Anonymous browser client, used only for realtime broadcast topics keyed by tracking token.
 let sb: SupabaseClient | null = null;
 export const browserDb = () =>
-  (sb ??= createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, { auth: { persistSession: false } }));
+  (sb ??= createClient(devHost(process.env.NEXT_PUBLIC_SUPABASE_URL!, location.hostname), process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, { auth: { persistSession: false } }));
 
 // crypto.randomUUID needs a secure context (fails over http://192.168.x.x on a phone); getRandomValues doesn't.
 export function uuid() {

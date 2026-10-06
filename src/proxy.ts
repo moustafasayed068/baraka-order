@@ -4,7 +4,11 @@ import { NextResponse, type NextRequest } from "next/server";
 export function proxy(request: NextRequest) {
   const nonce = Buffer.from(crypto.randomUUID()).toString("base64");
   const dev = process.env.NODE_ENV === "development";
-  const supabase = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
+  const env = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
+  // same rule as devHost() in lib/client: a local Supabase is reached via the host the page was opened on
+  const local = new URL(env || "http://x").hostname;
+  const pageHost = (request.headers.get("host") ?? "localhost").replace(/:\d+$/, "");
+  const supabase = local === "127.0.0.1" || local === "localhost" ? env.replace(local, pageHost) : env;
   const ws = supabase.replace(/^http/, "ws");
   const customerPage = !/^\/(kitchen|screen|rider|admin)/.test(request.nextUrl.pathname);
   const csp = [

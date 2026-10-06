@@ -16,10 +16,12 @@ const MOVES = {
   ready: ["preparing", "ready", null],
   collected: ["ready", "collected", "pickup"],
   not_collected: ["ready", "not_collected", "pickup"],
-  // ponytail: kitchen hands delivery orders out until rider assignment exists (build step 5)
-  dispatch: ["ready", "out_for_delivery", "delivery"],
 } as const;
-const Body = z.object({ orderId: z.uuid(), action: z.enum(["start", "ready", "collected", "not_collected", "dispatch"]) });
+const Body = z.union([
+  z.object({ orderId: z.uuid(), action: z.enum(["start", "ready", "collected", "not_collected"]) }),
+  z.object({ orderId: z.uuid(), action: z.literal("assign"), riderId: z.uuid() }), // pick / change rider until picked up
+  z.object({ orderId: z.uuid(), action: z.literal("returned") }), // rider flagged a problem and brought the food back
+]);
 
 // Kitchen can only move orders of its own branch one step forward; it never touches money fields.
 export async function POST(req: NextRequest) {
@@ -29,8 +31,26 @@ export async function POST(req: NextRequest) {
   const b = Body.safeParse(await req.json().catch(() => null));
   if (!b.success) return NextResponse.json({ error: "invalid" }, { status: 400 });
 
+  const db = adminDb();
+  if (b.data.action === "assign") {
+    const { data: rider } = await db.from("riders").select("id").eq("id", b.data.riderId).eq("branch_id", device.branch.id).eq("active", true).maybeSingle();
+    if (!rider) return NextResponse.json({ error: "invalid" }, { status: 400 });
+    const { data, error } = await db.from("orders").update({ rider_id: rider.id })
+      .eq("id", b.data.orderId).eq("branch_id", device.branch.id).eq("type", "delivery").eq("status", "ready").select("id");
+    if (error) return NextResponse.json({ error: "server" }, { status: 500 });
+    return data.length ? NextResponse.json({ ok: true }) : NextResponse.json({ error: "stale" }, { status: 409 });
+  }
+  if (b.data.action === "returned") {
+    const { data, error } = await db.from("orders").update({ status: "cancelled" })
+      .eq("id", b.data.orderId).eq("branch_id", device.branch.id).eq("status", "out_for_delivery").not("problem", "is", null).select("id, problem");
+    if (error) return NextResponse.json({ error: "server" }, { status: 500 });
+    if (!data.length) return NextResponse.json({ error: "stale" }, { status: 409 });
+    await db.from("audit_log").insert({ action: "order_cancelled", entity: "orders", entity_id: b.data.orderId, after: { reason: data[0].problem, device: device.id } });
+    return NextResponse.json({ ok: true });
+  }
+
   const [from, to, type] = MOVES[b.data.action];
-  let q = adminDb().from("orders").update({ status: to })
+  let q = db.from("orders").update({ status: to })
     .eq("id", b.data.orderId).eq("branch_id", device.branch.id).eq("status", from);
   if (type) q = q.eq("type", type);
   const { data, error } = await q.select("id");
@@ -38,7 +58,7 @@ export async function POST(req: NextRequest) {
   if (!data.length) return NextResponse.json({ error: "stale" }, { status: 409 }); // already moved on another screen
 
   if (to === "not_collected") {
-    await adminDb().from("audit_log").insert({ action: "order_not_collected", entity: "orders", entity_id: b.data.orderId, after: { device: device.id } });
+    await db.from("audit_log").insert({ action: "order_not_collected", entity: "orders", entity_id: b.data.orderId, after: { device: device.id } });
   }
   return NextResponse.json({ ok: true });
 }

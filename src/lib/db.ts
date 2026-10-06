@@ -116,6 +116,8 @@ export type KitchenOrder = {
   id: string; number: number; first_name: string; type: "pickup" | "delivery"; status: string; total: number;
   payment_status: string; pickup_in_min: number; created_at: string; ready_at: string | null; needs_call_confirm: boolean;
   call_phone: string | null; // full number only while the order needs a confirmation call
+  rider_id: string | null;
+  problem: string | null;
   items: { qty: number; name_ar: string; name_en: string; option_ar: string | null; option_en: string | null }[];
 };
 
@@ -123,9 +125,10 @@ export type KitchenOrder = {
 export async function kitchenOrders(branchId: string): Promise<KitchenOrder[]> {
   const { data, error } = await adminDb()
     .from("orders")
-    .select("id, number, customer_name, type, status, total, payment_status, pickup_in_min, created_at, ready_at, needs_call_confirm, customer_phone, order_items(qty, name_ar, name_en, option_ar, option_en)")
+    .select("id, number, customer_name, type, status, total, payment_status, pickup_in_min, created_at, ready_at, needs_call_confirm, customer_phone, rider_id, problem, order_items(qty, name_ar, name_en, option_ar, option_en)")
     .eq("branch_id", branchId)
-    .in("status", ["received", "preparing", "ready"])
+    // plus deliveries a rider flagged with a problem, so the branch can deal with them
+    .or("status.in.(received,preparing,ready),and(status.eq.out_for_delivery,problem.not.is.null)")
     .order("created_at");
   if (error) throw error;
   return data.map(({ customer_name, customer_phone, order_items, ...o }) => ({
@@ -152,4 +155,47 @@ export async function screenNumbers(branchId: string) {
 export async function branchList() {
   const { data } = await publicDb().from("branches").select("slug, name_ar, name_en").order("sort");
   return data ?? [];
+}
+
+export type BranchRider = { id: string; name: string };
+export async function branchRiders(branchId: string): Promise<BranchRider[]> {
+  const { data } = await adminDb().from("riders").select("id, name").eq("branch_id", branchId).eq("active", true).order("name");
+  return data ?? [];
+}
+
+// Rider shift session from the HttpOnly cookie (16 h, revocable).
+export async function getRider() {
+  const token = (await cookies()).get("bk_rider")?.value;
+  if (!token || !/^[0-9a-f]{64}$/.test(token)) return null;
+  const { data } = await adminDb()
+    .from("rider_sessions")
+    .select("id, created_at, riders!inner(id, name, active, branch_id, branches(name_ar, name_en))")
+    .eq("token_hash", createHash("sha256").update(token).digest("hex"))
+    .is("revoked_at", null)
+    .gt("expires_at", new Date().toISOString())
+    .maybeSingle();
+  const r = data?.riders as unknown as { id: string; name: string; active: boolean; branch_id: string; branches: { name_ar: string; name_en: string } } | undefined;
+  if (!data || !r?.active) return null;
+  return { sessionId: data.id as string, shiftStart: data.created_at as string, id: r.id, name: r.name, branchId: r.branch_id, branch: r.branches };
+}
+
+export type RiderOrder = {
+  id: string; number: number; status: string; customer_name: string; customer_phone: string; total: number;
+  payment_status: string; problem: string | null; created_at: string;
+  address: { street: string; building: string; floor: string; apartment: string; landmark: string; lat: number | null; lng: number | null };
+  items: { qty: number; name_ar: string; name_en: string; option_ar: string | null; option_en: string | null }[];
+};
+
+// Riders see full name, phone and address, but only for orders assigned to them.
+export async function riderView(riderId: string, shiftStart: string) {
+  const db = adminDb();
+  const [orders, delivered] = await Promise.all([
+    db.from("orders")
+      .select("id, number, status, customer_name, customer_phone, total, payment_status, problem, created_at, address, items:order_items(qty, name_ar, name_en, option_ar, option_en)")
+      .eq("rider_id", riderId).in("status", ["ready", "out_for_delivery"]).order("created_at"),
+    db.from("orders").select("total, payment_method").eq("rider_id", riderId).eq("status", "delivered").gte("delivered_at", shiftStart),
+  ]);
+  if (orders.error) throw orders.error;
+  const cash = (delivered.data ?? []).filter((o) => o.payment_method === "cash").reduce((s, o) => s + o.total, 0);
+  return { orders: orders.data as RiderOrder[], cash, deliveredCount: delivered.data?.length ?? 0 };
 }

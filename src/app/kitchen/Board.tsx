@@ -1,17 +1,18 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { LangToggle } from "@/components/LangToggle";
-import type { DeviceBranch, KitchenOrder } from "@/lib/db";
+import type { BranchRider, DeviceBranch, KitchenOrder } from "@/lib/db";
 import { dict, pick, type Lang } from "@/lib/i18n";
 import { useBranchLive, useSound, useWakeLock } from "@/lib/staff-client";
 
-type Action = "start" | "ready" | "collected" | "not_collected" | "dispatch";
+type Action = "start" | "ready" | "collected" | "not_collected" | "assign" | "returned";
+type Problem = keyof typeof dict.ar.kitchen.problem;
 type MenuRow = { id: string; name_ar: string; name_en: string; sold_out: boolean };
 
 const NO_SHOW_MIN = 30;
 const minsSince = (iso: string, now: number) => Math.max(0, Math.floor((now - Date.parse(iso)) / 60_000));
 
-export function Board({ lang, branch, initial }: { lang: Lang; branch: DeviceBranch; initial: KitchenOrder[] }) {
+export function Board({ lang, branch, initial, riders }: { lang: Lang; branch: DeviceBranch; initial: KitchenOrder[]; riders: BranchRider[] }) {
   const t = dict[lang].kitchen;
   const [orders, setOrders] = useState(initial);
   const [fetchOk, setFetchOk] = useState(true);
@@ -57,9 +58,9 @@ export function Board({ lang, branch, initial }: { lang: Lang; branch: DeviceBra
     return () => clearInterval(id);
   }, [unacked.length, soundOn, play]);
 
-  async function act(orderId: string, action: Action) {
+  async function act(orderId: string, action: Action, extra?: { riderId: string }) {
     setBusy(orderId);
-    const res = await fetch("/api/kitchen", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ orderId, action }) }).catch(() => null);
+    const res = await fetch("/api/kitchen", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ orderId, action, ...extra }) }).catch(() => null);
     if (res?.status === 409) setNotice(t.stale);
     else if (!res?.ok) setFetchOk(false);
     await refresh();
@@ -83,7 +84,8 @@ export function Board({ lang, branch, initial }: { lang: Lang; branch: DeviceBra
   }
 
   const col = (status: string, title: string) => {
-    const xs = orders.filter((o) => o.status === status);
+    // problem deliveries (rider flagged no answer / wrong address / refused) come back to the Ready column
+    const xs = orders.filter((o) => o.status === status || (status === "ready" && o.status === "out_for_delivery"));
     return (
       <section className="col" aria-label={title}>
         <h2><span>{title}</span><b className="num">{xs.length}</b></h2>
@@ -99,8 +101,8 @@ export function Board({ lang, branch, initial }: { lang: Lang; branch: DeviceBra
     const next: [Action, string, string] | null =
       o.status === "received" ? ["start", t.start, ""]
       : o.status === "preparing" ? ["ready", t.markReady, "ok"]
-      : o.type === "pickup" ? ["collected", t.collected, ""]
-      : ["dispatch", t.dispatch, ""];
+      : o.status === "ready" && o.type === "pickup" ? ["collected", t.collected, ""]
+      : null; // delivery: rider picks it up from the rider page
     return (
       <article key={o.id} className={`tk ${cls}`}>
         <div className="top">
@@ -121,6 +123,20 @@ export function Board({ lang, branch, initial }: { lang: Lang; branch: DeviceBra
         <div className="meta">
           <span>{o.payment_status === "paid" ? t.paid : t.collectCash(o.total)}</span>
         </div>
+        {o.problem && <span className="ktag dark bg-bad! text-base!">⚠ {t.problem[o.problem as Problem] ?? o.problem}</span>}
+        {o.type === "delivery" && o.status === "ready" && (
+          <label className="grid gap-1 text-sm font-semibold">
+            {t.rider}
+            <select className="kselect" value={o.rider_id ?? ""} disabled={busy === o.id} onChange={(e) => act(o.id, "assign", { riderId: e.target.value })}>
+              <option value="" disabled>{t.assignRider}</option>
+              {riders.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
+            </select>
+            {o.rider_id && <span className="text-muted">{t.waitingPickup}</span>}
+          </label>
+        )}
+        {o.status === "out_for_delivery" && o.problem && (
+          <button type="button" className="go quiet" disabled={busy === o.id} onClick={() => act(o.id, "returned")}>{t.returned}</button>
+        )}
         {next && (
           <button type="button" className={`go ${next[2]}`} disabled={busy === o.id} onClick={() => act(o.id, next[0])}>{next[1]}</button>
         )}

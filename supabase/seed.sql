@@ -71,3 +71,8 @@ select id, 'التوصيل', 'Delivery', 25, 140, 7, true from branches;
 
 -- DEV ONLY: every branch PIN is 1234 for local testing. Real PINs are set per branch before launch.
 insert into branch_pins (branch_id, pin_hash) select id, extensions.crypt('1234', extensions.gen_salt('bf')) from branches;
+
+-- DEV ONLY: two test riders per branch, PIN 1234. Phones 0100000XX01 / 0100000XX02 (XX = branch sort).
+insert into riders (branch_id, name, phone, pin_hash)
+select b.id, v.name || ' ' || b.name_ar, '0100000' || lpad(b.sort::text, 2, '0') || v.n, extensions.crypt('1234', extensions.gen_salt('bf'))
+from branches b cross join (values ('طيار تجريبي 1', '01'), ('طيار تجريبي 2', '02')) v(name, n);
