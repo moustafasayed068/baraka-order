@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { getStaff, staffDb } from "@/lib/auth";
+import { getStaff, needs2fa, staffDb } from "@/lib/auth";
 import { getLang } from "@/lib/db";
 import { businessDate } from "@/lib/hours";
 import { dict, pick } from "@/lib/i18n";
@@ -19,9 +19,13 @@ const HOURS = [...Array.from({ length: 15 }, (_, i) => i + 9), 0, 1, 2, 3];
 
 // Owner / manager overview. The dashboard() SQL function runs with the caller's RLS (manager = own branch).
 export default async function Dashboard({ searchParams }: PageProps<"/admin">) {
-  const staff = (await getStaff())!;
+  // Pages render in parallel with the layout, so each page checks the session itself.
+  const staff = await getStaff();
+  if (!staff) redirect("/admin/login");
+  if (needs2fa(staff)) redirect("/admin/mfa");
   if (staff.role === "cashier") redirect("/admin/orders");
   if (staff.role === "callcentre") redirect("/admin/call");
+  if (staff.role === "kitchen") redirect("/kitchen");
   const sp = await searchParams;
   const lang = await getLang();
   const t = dict[lang].admin.db;
