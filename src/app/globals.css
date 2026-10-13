@@ -272,3 +272,31 @@ a.chip[aria-current="true"] { border-color: var(--color-red); background: #FFE9E
 .sec { margin: 6px 0 2px; font-size: 12.5px; font-weight: 700; letter-spacing: .03em; color: var(--color-muted); text-transform: uppercase; }
 .linkish { color: var(--color-red-deep); font-weight: 700; font-size: 14px; text-decoration: underline; text-underline-offset: 3px; min-height: 44px; }
 .sticky-total { background: var(--color-paper); border-radius: 14px; padding: 12px 14px; }
+
+/* ---------- kitchen polish: live stats, print, 80 mm receipt ---------- */
+.kstats { display: flex; flex-wrap: wrap; gap: 6px; font-weight: 800; font-size: 15px; }
+.kstats span { background: rgba(0,0,0,.22); color: #fff; border-radius: 999px; padding: 6px 12px; }
+.kstats span.bad { background: var(--color-yellow); color: var(--color-ink); animation: blink 1.4s steps(2) infinite; }
+.tbtn.on { background: var(--color-ok); border-color: var(--color-ok); color: #fff; }
+.kprint { width: 40px; height: 40px; border-radius: 10px; background: #fff; border: 1.5px solid var(--color-line); font-size: 18px; display: grid; place-items: center; }
+.tk { box-shadow: 0 6px 16px -12px rgba(0,0,0,.6); transition: transform .12s; }
+.tk.late { animation: late-glow 2s ease-in-out infinite; }
+@keyframes late-glow { 50% { box-shadow: 0 0 0 4px rgba(198,40,40,.35); } }
+.col h2 { position: sticky; top: 0; }
+
+.receipt { display: none; }
+@page receipt { size: 80mm auto; margin: 3mm; }
+@media print {
+  .night { background: #fff !important; min-height: 0; }
+  .night > :not(.receipt) { display: none !important; }
+  .receipt { display: block; page: receipt; width: 74mm; color: #000; font-family: var(--font-body); font-size: 13px; line-height: 1.35; }
+  .receipt hr { border: 0; border-top: 1px dashed #000; margin: 6px 0; }
+  .r-brand { font-family: var(--font-display); font-size: 26px; text-align: center; line-height: 1.1; }
+  .r-center { text-align: center; }
+  .r-strong { font-weight: 800; }
+  .r-no { font-family: var(--font-display); font-size: 46px; text-align: center; line-height: 1.05; margin: 4px 0; }
+  .r-row { display: flex; justify-content: space-between; gap: 6px; }
+  .r-item { display: grid; grid-template-columns: 2.4em 1fr; gap: 4px; font-size: 15px; font-weight: 700; margin: 3px 0; }
+  .r-item small { font-weight: 400; font-size: 12px; }
+  .r-total { font-size: 17px; font-weight: 800; }
+}
