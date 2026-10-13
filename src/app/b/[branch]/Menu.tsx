@@ -43,6 +43,8 @@ export function Menu({ lang, branch, categories, items, blocked, delivery: zone,
   const [bad, setBad] = useState<Set<string>>(new Set()); // items the server rejected (sold out mid-cart)
   const [error, setError] = useState<ErrorCode | null>(null);
   const [sending, setSending] = useState(false);
+  const [query, setQuery] = useState("");
+  const [toast, setToast] = useState(0); // bumps on every add, drives the toast and the cart-bar pulse
   const honeypot = useRef<HTMLInputElement>(null);
   const idemKey = useRef("");
   const mountedAt = useRef(0);
@@ -77,6 +79,16 @@ export function Menu({ lang, branch, categories, items, blocked, delivery: zone,
       if (i < 0) return [...c, { itemId, optionId, qty }];
       return c.map((l, j) => (j === i ? { ...l, qty: Math.min(MAX_QTY, l.qty + qty) } : l));
     });
+    setToast((n) => n + 1);
+  }
+  useEffect(() => {
+    if (!toast) return;
+    const id = setTimeout(() => setToast(0), 1600);
+    return () => clearTimeout(id);
+  }, [toast]);
+  const qtyOf = (itemId: string) => lines.reduce((s, l) => (l.itemId === itemId ? s + l.qty : s), 0);
+  function clearCart() {
+    if (confirm(t.cart.clearConfirm)) { setCart([]); setSheet(null); }
   }
   const changeQty = (idx: number, d: number) =>
     setCart((c) => c.map((l, j) => (j === idx ? { ...l, qty: Math.min(MAX_QTY, l.qty + d) } : l)).filter((l) => l.qty > 0));
@@ -142,8 +154,14 @@ export function Menu({ lang, branch, categories, items, blocked, delivery: zone,
     }
   }
 
-  const shown = items.filter((i) => i.category_id === cat);
-  const isExtras = categories.find((c) => c.id === cat)?.slug === "extras";
+  // search looks across every category, in both languages
+  const q = query.trim().toLowerCase();
+  const shown = q
+    ? items.filter((i) => [i.name_ar, i.name_en, i.desc_ar, i.desc_en, ...i.options.flatMap((o) => [o.name_ar, o.name_en])]
+        .some((x) => x?.toLowerCase().includes(q)))
+    : items.filter((i) => i.category_id === cat);
+  const isExtras = !q && categories.find((c) => c.id === cat)?.slug === "extras";
+  const openItem = (m: MenuItem) => setSheet({ kind: "item", item: m, optionId: m.options[0]?.id ?? null, qty: 1 });
 
   return (
     <>
@@ -165,26 +183,39 @@ export function Menu({ lang, branch, categories, items, blocked, delivery: zone,
         {tooFar && <p className="banner mx-0! mb-0!">{t.delivery.tooFar}</p>}
       </div>
 
-      <nav className="cats" aria-label="menu">
-        {categories.map((c) => (
-          <button key={c.id} type="button" aria-pressed={cat === c.id} onClick={() => setCat(c.id)}>{pick(c, lang)}</button>
-        ))}
-      </nav>
+      <div className="cats-wrap">
+        <label className="search">
+          <span aria-hidden="true">⌕</span>
+          <input type="search" value={query} placeholder={t.menu.search} aria-label={t.menu.search}
+            onChange={(e) => setQuery(e.target.value)} enterKeyHint="search" />
+          {query && <button type="button" aria-label="×" onClick={() => setQuery("")}>×</button>}
+        </label>
+        {!q && (
+          <nav className="cats" aria-label="menu">
+            {categories.map((c) => (
+              <button key={c.id} type="button" aria-pressed={cat === c.id} onClick={() => setCat(c.id)}>{pick(c, lang)}</button>
+            ))}
+          </nav>
+        )}
+      </div>
 
       <main className="menu">
+        {q && shown.length === 0 && <p className="text-center text-muted py-8">{t.menu.noResults}</p>}
         {isExtras ? (
           <div className="extras">
             {shown.map((x) => (
               <button key={x.id} type="button" className="extra" disabled={isOut(x.id)} onClick={() => add(x.id, null)}>
                 <span>{pick(x, lang)}{isOut(x.id) && <> <span className="tag">{t.menu.soldOut}</span></>}</span>
-                <span className="price num">{x.base_price}</span>
+                <span className="flex items-center gap-1.5">
+                  <span className="price num">{x.base_price}</span>
+                  {qtyOf(x.id) > 0 ? <span className="incart num" aria-label={t.menu.inCart(qtyOf(x.id))}>{qtyOf(x.id)}</span> : <span className="add sm" aria-hidden="true">+</span>}
+                </span>
               </button>
             ))}
           </div>
         ) : (
           shown.map((m) => (
-            <button key={m.id} type="button" className="item" disabled={isOut(m.id)}
-              onClick={() => setSheet({ kind: "item", item: m, optionId: m.options[0]?.id ?? null, qty: 1 })}>
+            <button key={m.id} type="button" className="item" disabled={isOut(m.id)} onClick={() => openItem(m)}>
               <div className="plate">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 {m.photo_url ? <img src={m.photo_url} alt="" loading="lazy" /> : m.name_ar}
@@ -194,7 +225,9 @@ export function Menu({ lang, branch, categories, items, blocked, delivery: zone,
                 <p>{lang === "ar" ? m.desc_ar : m.desc_en}</p>
                 <div className="pr">
                   <span className="price num">{m.options.some((o) => o.price_delta) && t.menu.from}{m.base_price}<small>{t.egp}</small></span>
-                  <span className="add" aria-hidden="true">+</span>
+                  {qtyOf(m.id) > 0
+                    ? <span className="incart num" aria-label={t.menu.inCart(qtyOf(m.id))}>{qtyOf(m.id)}</span>
+                    : <span className="add" aria-hidden="true">+</span>}
                 </div>
               </div>
             </button>
@@ -202,8 +235,9 @@ export function Menu({ lang, branch, categories, items, blocked, delivery: zone,
         )}
       </main>
 
+      {toast > 0 && <div className="toast" role="status">{t.menu.added}</div>}
       {count > 0 && (
-        <button type="button" className="cartbar" onClick={() => setSheet({ kind: "cart" })}>
+        <button key={toast} type="button" className={`cartbar ${toast ? "bump" : ""}`} onClick={() => setSheet({ kind: "cart" })}>
           <span><span className="count num">{count}</span>{t.menu.viewCart}</span>
           <span className="num">{total} {t.egp}</span>
         </button>
@@ -213,6 +247,11 @@ export function Menu({ lang, branch, categories, items, blocked, delivery: zone,
         <div className="sheet-bg" onClick={(e) => e.target === e.currentTarget && setSheet(null)}>
           {sheet.kind === "item" ? (
             <div className="sheet" role="dialog" aria-modal="true" aria-label={pick(sheet.item, lang)}>
+              <div className="grab" aria-hidden="true" />
+              {sheet.item.photo_url && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img className="sheet-photo" src={sheet.item.photo_url} alt="" />
+              )}
               <h3>{pick(sheet.item, lang)}</h3>
               <div className="text-sm text-muted">{lang === "ar" ? sheet.item.desc_ar : sheet.item.desc_en}</div>
               {sheet.item.options.length > 0 && (
@@ -243,7 +282,12 @@ export function Menu({ lang, branch, categories, items, blocked, delivery: zone,
           ) : (
             <form className="sheet" role="dialog" aria-modal="true" aria-label={t.cart.title} noValidate
               onSubmit={(e) => { e.preventDefault(); place(); }}>
-              <h3>{t.cart.title}</h3>
+              <div className="grab" aria-hidden="true" />
+              <div className="flex items-baseline justify-between gap-2">
+                <h3>{t.cart.title}</h3>
+                {lines.length > 0 && <button type="button" className="linkish" onClick={clearCart}>{t.cart.clear}</button>}
+              </div>
+              <p className="sec">{t.cart.yourItems} · <span className="num">{t.cart.itemsCount(count)}</span></p>
               {lines.length === 0 && <p className="text-center text-muted py-4">{t.cart.empty}</p>}
               {lines.map((l, idx) => {
                 const i = byId.get(l.itemId)!;
@@ -270,6 +314,7 @@ export function Menu({ lang, branch, categories, items, blocked, delivery: zone,
                 </div>
               )}
 
+              <p className="sec mt-4">{t.cart.details}</p>
               <div className="field">
                 <label htmlFor="f-name">{t.cart.name}</label>
                 <input id="f-name" autoComplete="given-name" maxLength={40} placeholder={t.cart.namePh} value={me.name}
@@ -344,7 +389,7 @@ export function Menu({ lang, branch, categories, items, blocked, delivery: zone,
                   <div className="flex justify-between"><span>{t.delivery.fee}</span><span className="num">{fee} {t.egp}</span></div>
                 </div>
               )}
-              <div className="totals"><span>{t.cart.total}</span><span className="num">{total + fee} {t.egp}</span></div>
+              <div className="totals sticky-total"><span>{t.cart.total}</span><span className="num">{total + fee} {t.egp}</span></div>
               {tooFar && <p className="alert">{t.delivery.tooFar}</p>}
               {short > 0 && <p className="alert">{t.delivery.minOrder(zone!.min_order)} — {t.delivery.addMore(short)}</p>}
               {error && <p className="alert" role="alert">{t.errors[error]}</p>}
