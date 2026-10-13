@@ -50,7 +50,7 @@ export default async function BranchPage({ params, searchParams }: PageProps<"/b
       {blocked && <p className="banner" role="status">{blocked}</p>}
       <Menu lang={lang} branch={branch.slug} categories={cats.data} items={menu} blocked={!!blocked}
         delivery={zones.data?.[0] ? { ...(zones.data[0] as Omit<Delivery, "branchPt" | "eta">), branchPt: branch.lat !== null && branch.lng !== null ? [branch.lat, branch.lng] : null, eta: wait + DELIVERY_TRAVEL_MIN } : null}
-        acceptsDelivery={branch.accepts_delivery} initialMode={mode === "delivery" ? "delivery" : "pickup"} onlinePay={onlinePayOffered()} />
+        acceptsDelivery={branch.accepts_delivery} initialMode={mode === "delivery" ? "delivery" : "pickup"} onlinePay={onlinePayOffered()} wait={wait} />
     </div>
   );
 }

@@ -24,3 +24,7 @@ export const fmtTime = (t: string, lang: "ar" | "en") =>
 // Same rule as business_date() in the database.
 export const businessDate = (now = new Date()) =>
   new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo" }).format(new Date(now.getTime() - 6 * 3600_000));
+
+// Clock time in Cairo, Western digits in both languages to match prices: "9:45 م" / "9:45 PM"
+export const clockAt = (at: string | number | Date, lang: "ar" | "en") =>
+  new Date(at).toLocaleTimeString(lang === "ar" ? "ar-EG-u-nu-latn" : "en-US", { timeZone: "Africa/Cairo", hour: "numeric", minute: "2-digit" });
