@@ -321,3 +321,8 @@ a.chip[aria-current="true"] { border-color: var(--color-red); background: #FFE9E
 .pay-methods { text-align: center; font-weight: 700; font-size: 13.5px; color: var(--color-ink); background: #FFF1C9; border-radius: 12px; padding: 8px; }
 .text-ok { color: var(--color-ok); }
 .text-red { color: var(--color-red); }
+
+/* ---------- expected ready time (checkout + tracking) ---------- */
+.ready-hint { margin: 8px 0 0; padding: 8px 12px; border-radius: 12px; background: #E7F6EC; color: var(--color-ok); font-weight: 700; font-size: 14px; }
+.ready-by { font-weight: 800; font-size: 17px; }
+.ready-by small { font-weight: 600; font-size: 13px; color: var(--color-muted); }

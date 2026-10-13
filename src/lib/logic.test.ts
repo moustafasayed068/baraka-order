@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { priceLines, type DbItem } from "./pricing";
 import { distanceKm, nearestBranch } from "./geo";
-import { businessDate, isOpenAt } from "./hours";
+import { businessDate, clockAt, isOpenAt } from "./hours";
 import { totp } from "./totp";
 
 const strips: DbItem = {
@@ -75,5 +75,14 @@ describe("businessDate (Cairo, 06:00 cut-off)", () => {
   it("winter time (UTC+2)", () => {
     expect(businessDate(new Date("2026-12-15T03:30:00Z"))).toBe("2026-12-14"); // 05:30 Cairo
     expect(businessDate(new Date("2026-12-15T04:30:00Z"))).toBe("2026-12-15"); // 06:30 Cairo
+  });
+});
+
+describe("clockAt (expected ready time)", () => {
+  // 2026-10-13 18:45 UTC = 21:45 in Cairo (UTC+3)
+  const at = "2026-10-13T18:45:00Z";
+  it("shows Cairo time with Western digits in both languages", () => {
+    expect(clockAt(at, "en")).toBe("9:45 PM");
+    expect(clockAt(at, "ar")).toMatch(/^9:45\s?م$/);
   });
 });

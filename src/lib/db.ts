@@ -53,7 +53,7 @@ export async function activeOrderCount(branchId: string) {
 
 export type Tracking = {
   number: number; status: string; type: string; total: number; pickup_in_min: number; created_at: string;
-  customer_name: string; ahead: number; eta: number; delivery_fee: number; payment_status: string;
+  customer_name: string; ahead: number; eta: number; ready_by: string; delivery_fee: number; payment_status: string;
   address: { street: string; building: string; floor: string; apartment: string; landmark: string } | null;
   rider: { name: string; phone: string } | null;
   branch: { id: string; slug: string; name_ar: string; name_en: string; address_ar: string; address_en: string };
@@ -77,10 +77,13 @@ export async function getTracking(token: string): Promise<Tracking | null> {
       .eq("branch_id", o.branch_id).in("status", ACTIVE_STATUSES).lt("created_at", o.created_at);
     ahead = count ?? 0;
   }
+  const eta = Math.max(estimateMin(ahead, branch.extra_wait_min), o.pickup_in_min) + (o.type === "delivery" ? DELIVERY_TRAVEL_MIN : 0);
   return {
     number: o.number, status: o.status, type: o.type, total: o.total, pickup_in_min: o.pickup_in_min, created_at: o.created_at,
     customer_name: o.customer_name.split(" ")[0], ahead,
-    eta: Math.max(estimateMin(ahead, branch.extra_wait_min), o.pickup_in_min) + (o.type === "delivery" ? DELIVERY_TRAVEL_MIN : 0),
+    eta,
+    // clock time the order should be ready (pickup) or at the door (delivery), formatted on the client in Cairo time
+    ready_by: new Date(Date.now() + eta * 60_000).toISOString(),
     delivery_fee: o.delivery_fee,
     payment_status: o.payment_status,
     address: o.address,

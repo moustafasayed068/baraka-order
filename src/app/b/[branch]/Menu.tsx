@@ -3,6 +3,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { elapsed, saveOrder, store, uuid } from "@/lib/client";
 import { distanceKm, type Pt } from "@/lib/geo";
+import { clockAt } from "@/lib/hours";
 import { dict, pick, type ErrorCode, type Lang } from "@/lib/i18n";
 import { normalizePhone, PHONE_RE } from "@/lib/phone";
 
@@ -20,11 +21,14 @@ const EMPTY_ADDR: Address = { street: "", building: "", floor: "", apartment: ""
 type Sheet = null | { kind: "cart" } | { kind: "item"; item: MenuItem; optionId: string | null; qty: number };
 
 const MAX_QTY = 20;
+// clock time `minutes` from now (the checkout sheet only renders after a tap, so this never runs during hydration)
+const clockIn = (minutes: number, lang: Lang) => clockAt(Date.now() + minutes * 60_000, lang);
 const unitPrice = (i: MenuItem, optionId: string | null) => i.base_price + (i.options.find((o) => o.id === optionId)?.price_delta ?? 0);
 
-export function Menu({ lang, branch, categories, items, blocked, delivery: zone, acceptsDelivery, initialMode, onlinePay = false }: {
+export function Menu({ lang, branch, categories, items, blocked, delivery: zone, acceptsDelivery, initialMode, onlinePay = false, wait }: {
   lang: Lang; branch: string; categories: Category[]; items: MenuItem[]; blocked: boolean;
   delivery: Delivery | null; acceptsDelivery: boolean; initialMode: "pickup" | "delivery"; onlinePay?: boolean;
+  wait: number; // current kitchen estimate in minutes
 }) {
   const t = dict[lang];
   const router = useRouter();
@@ -375,7 +379,11 @@ export function Menu({ lang, branch, categories, items, blocked, delivery: zone,
                       <button key={v} type="button" className="chip" aria-pressed={pickupInMin === v} onClick={() => setPickupInMin(v)}>{label}</button>
                     ))}
                   </div>
+                  <p className="ready-hint num" role="status">⏱ {t.cart.readyAt(clockIn(Math.max(wait, pickupInMin), lang), Math.max(wait, pickupInMin))}</p>
                 </div>
+              )}
+              {delivery && zone && (
+                <p className="ready-hint num" role="status">🛵 {t.cart.arriveAt(clockIn(zone.eta, lang), zone.eta)}</p>
               )}
               <div className="opt-group">
                 <h4>{t.cart.payment}</h4>

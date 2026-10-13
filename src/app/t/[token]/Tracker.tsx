@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { browserDb, saveOrder } from "@/lib/client";
+import { clockAt } from "@/lib/hours";
 import type { Tracking } from "@/lib/db";
 import { dict, pick, type Lang, type OrderStatus } from "@/lib/i18n";
 
@@ -39,7 +40,10 @@ export function Tracker({ lang, token, initial }: { lang: Lang; token: string; i
     prevStatus.current = o.status;
   }, [o.status, o.type]);
 
-  // Realtime via broadcast topics keyed by the token (never the orders table); poll every 10 s if it drops.
+  // Realtime via broadcast topics keyed by the token (never the orders table).
+  // Polls every 10 s while the live channel is down, and every 30 s anyway as a safety net.
+  // Keep this effect's deps stable: re-creating a channel with the same topic while the old one is still
+  // leaving makes supabase-js hand back the dying channel, and live updates silently stop.
   useEffect(() => {
     if (done) return;
     const refresh = () => fetch(`/api/track/${token}`, { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)).then((d) => d && setO(d)).catch(() => {});
@@ -49,19 +53,34 @@ export function Tracker({ lang, token, initial }: { lang: Lang; token: string; i
       .on("broadcast", { event: "status" }, refresh)
       .subscribe((s) => setLive(s === "SUBSCRIBED"));
     const branchCh = db.channel(`branch:${initial.branch.id}`).on("broadcast", { event: "changed" }, refresh).subscribe();
-    const poll = setInterval(() => !navigator.onLine || ch.state !== "joined" ? refresh() : undefined, 10_000);
-    // just back from the payment page: check often until the webhook confirms
-    const payPoll = o.status === "awaiting_payment" ? setInterval(refresh, 3000) : undefined;
+    let tick = 0;
+    const poll = setInterval(() => {
+      tick++;
+      if (!navigator.onLine || ch.state !== "joined" || tick % 3 === 0) refresh();
+    }, 10_000);
+    // phone woke up, tab came back, page restored from the back/forward cache, or network returned
     const onVisible = () => document.visibilityState === "visible" && refresh();
     document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("pageshow", refresh);
+    window.addEventListener("online", refresh);
     return () => {
       clearInterval(poll);
-      clearInterval(payPoll);
       document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("pageshow", refresh);
+      window.removeEventListener("online", refresh);
       db.removeChannel(ch);
       db.removeChannel(branchCh);
     };
-  }, [token, done, initial.branch.id, o.status]);
+  }, [token, done, initial.branch.id]);
+
+  // just back from the payment page: check often until the webhook confirms
+  const awaitingPay = o.status === "awaiting_payment";
+  useEffect(() => {
+    if (!awaitingPay) return;
+    const id = setInterval(() => fetch(`/api/track/${token}`, { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null)).then((d) => d && setO(d)).catch(() => {}), 3000);
+    return () => clearInterval(id);
+  }, [awaitingPay, token]);
 
   const status = o.status as OrderStatus;
   const isDelivery = o.type === "delivery";
@@ -85,7 +104,7 @@ export function Tracker({ lang, token, initial }: { lang: Lang; token: string; i
 
       <div className={`status-card ${o.status === "ready" || o.status === "out_for_delivery" ? "ready" : ""}`} role="status" aria-live="polite">
         <div className="s">{isDelivery && o.status === "ready" ? t.track.st.preparing : t.track.st[status]}</div>
-        {waiting && <><div className="num">{t.track.ahead(o.ahead)}</div><div className="num">{t.track.eta(o.eta)}</div></>}
+        {waiting && <><div className="num">{t.track.ahead(o.ahead)}</div><div className="ready-by num">{(isDelivery ? t.track.arrivesBy : t.track.readyBy)(clockAt(o.ready_by, lang))} <small>({t.track.eta(o.eta)})</small></div></>}
         {o.status === "ready" && !isDelivery && <div>{t.track.showNo}</div>}
         {o.rider && (
           <a href={`tel:${o.rider.phone}`} className="btn yellow mt-1">📞 {t.track.callRider}: {o.rider.name}</a>
