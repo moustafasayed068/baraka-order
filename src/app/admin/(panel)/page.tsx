@@ -43,6 +43,9 @@ export default async function Dashboard({ searchParams }: PageProps<"/admin">) {
   if (error) throw error;
   const d = data as Dash;
   const maxBest = Math.max(1, ...d.best.map((b) => b.qty));
+  const done = Math.max(0, d.orders - d.cancelled - d.open - d.not_collected);
+  const avgOrder = done > 0 ? Math.round(d.revenue / done) : null;
+  const share = d.orders ? Math.round((d.delivery / d.orders) * 100) : 0;
   const maxHour = Math.max(1, ...Object.values(d.by_hour));
   const href = (range: string, branch = branchId ?? "") => `/admin?range=${range}${owner && branch ? `&branch=${branch}` : ""}`;
 
@@ -64,10 +67,11 @@ export default async function Dashboard({ searchParams }: PageProps<"/admin">) {
       </nav>
 
       <div className="kpis">
-        <div className="kpi"><span>{t.orders}</span><b className="num">{d.orders}</b><small>{t.split(d.pickup, d.delivery)}</small></div>
-        <div className="kpi"><span>{t.revenue}</span><b className="num">{d.revenue.toLocaleString("en")} <small>{egp}</small></b><small className="num">{d.open} {t.open}</small></div>
-        <div className="kpi"><span>{t.avgPrep}</span><b className="num">{d.avg_prep_min ?? "—"} <small>{t.min}</small></b><small className="num">{d.cancelled} {t.cancelled} · {d.not_collected} {t.notCollected}</small></div>
-        <div className="kpi"><span>{t.avgDelivery}</span><b className="num">{d.avg_delivery_min ?? "—"} <small>{t.min}</small></b><small className="num">{d.delivery} {t.deliveries}</small></div>
+        <div className="kpi k-red"><span>📦 {t.orders}</span><b className="num">{d.orders}</b><small>{t.split(d.pickup, d.delivery)}</small></div>
+        <div className="kpi k-yellow"><span>💰 {t.revenue}</span><b className="num">{d.revenue.toLocaleString("en")} <small>{egp}</small></b><small className="num">{d.open} {t.open}</small></div>
+        <div className="kpi k-ink"><span>⏱ {t.avgPrep}</span><b className="num">{d.avg_prep_min ?? "—"} <small>{t.min}</small></b><small className="num">{d.cancelled} {t.cancelled} · {d.not_collected} {t.notCollected}</small></div>
+        <div className="kpi k-ok"><span>🧾 {t.avgOrder}</span><b className="num">{avgOrder ?? "—"} {avgOrder !== null && <small>{egp}</small>}</b><small className="num">{t.share}: {share}%</small></div>
+        <div className="kpi k-ink"><span>🛵 {t.avgDelivery}</span><b className="num">{d.avg_delivery_min ?? "—"} <small>{t.min}</small></b><small className="num">{d.delivery} {t.deliveries}</small></div>
       </div>
 
       {d.orders === 0 ? <p className="card text-muted">{t.noData}</p> : (

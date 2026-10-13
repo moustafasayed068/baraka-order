@@ -300,3 +300,15 @@ a.chip[aria-current="true"] { border-color: var(--color-red); background: #FFE9E
   .r-item small { font-weight: 400; font-size: 12px; }
   .r-total { font-size: 17px; font-weight: 800; }
 }
+
+/* ---------- admin polish ---------- */
+.admin-bar { box-shadow: 0 6px 20px -14px rgba(120,20,10,.6); }
+.admin-nav a[aria-current="page"] { background: var(--color-paper); color: var(--color-red-deep); }
+.kpis { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
+.kpi { position: relative; overflow: hidden; border-block-start: 4px solid var(--color-line); box-shadow: 0 8px 22px -18px rgba(120,20,10,.5); }
+.kpi.k-red { border-block-start-color: var(--color-red); }
+.kpi.k-yellow { border-block-start-color: var(--color-yellow); }
+.kpi.k-ok { border-block-start-color: var(--color-ok); }
+.kpi.k-ink { border-block-start-color: var(--color-ink); }
+.card { box-shadow: 0 8px 22px -20px rgba(120,20,10,.5); }
+.tbl tbody tr:hover { background: #FFFBF4; }
