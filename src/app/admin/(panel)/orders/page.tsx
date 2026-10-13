@@ -6,7 +6,7 @@ import { dict, pick, type OrderStatus } from "@/lib/i18n";
 import { maskPhone, normalizePhone } from "@/lib/phone";
 import { cancelOrder, setBlocked } from "./actions";
 
-const STATUSES = ["received", "preparing", "ready", "out_for_delivery", "collected", "delivered", "not_collected", "cancelled"] as const;
+const STATUSES = ["awaiting_payment", "received", "preparing", "ready", "out_for_delivery", "collected", "delivered", "not_collected", "cancelled"] as const;
 const OPEN = ["received", "preparing", "ready", "out_for_delivery"];
 
 type Row = {

@@ -4,6 +4,7 @@ import { adminDb, getBranch } from "./db";
 import { distanceKm } from "./geo";
 import { isOpenAt } from "./hours";
 import type { ErrorCode } from "./i18n";
+import { onlinePayOffered } from "./paymob";
 import { PHONE_RE } from "./phone";
 import { priceLines, type DbItem } from "./pricing";
 
@@ -25,6 +26,7 @@ const Common = z.object({
   name: z.string().trim().min(2).max(40),
   phone: z.string().regex(PHONE_RE),
   pickupInMin: z.union([z.literal(0), z.literal(15), z.literal(30)]),
+  paymentMethod: z.enum(["cash", "online"]).default("cash"),
   lines: z.array(z.object({ itemId: z.uuid(), optionId: z.uuid().nullable(), qty: z.int().min(1).max(20) })).min(1).max(30),
 });
 export const OrderInput = z.discriminatedUnion("type", [
@@ -52,6 +54,8 @@ export async function placeOrder(b: OrderInput, ctx: { ip: string | null; staff?
   if (!branch.accepts_orders) return fail("paused", 409);
   if (!isOpenAt(branch.opens_at, branch.closes_at)) return fail("closed", 409);
   if (b.type === "delivery" && !branch.accepts_delivery) return fail("delivery_paused", 409);
+  // online payment only once Paymob is configured, and never for call-centre orders
+  if (b.paymentMethod === "online" && (ctx.staff || !onlinePayOffered())) return fail("invalid");
 
   const { data: customer } = await db.from("customers").select("blocked").eq("phone", b.phone).maybeSingle();
   if (customer?.blocked) return fail("blocked", 403);
@@ -63,7 +67,7 @@ export async function placeOrder(b: OrderInput, ctx: { ip: string | null; staff?
     const [byPhone, byIp, active] = await Promise.all([
       db.from("orders").select("id", { count: "exact", head: true }).eq("customer_phone", b.phone).gte("created_at", hourAgo),
       ctx.ip ? db.from("orders").select("id", { count: "exact", head: true }).eq("client_ip", ctx.ip).gte("created_at", hourAgo) : { count: 0 },
-      db.from("orders").select("id", { count: "exact", head: true }).eq("customer_phone", b.phone).in("status", ["received", "preparing", "ready", "out_for_delivery"]),
+      db.from("orders").select("id", { count: "exact", head: true }).eq("customer_phone", b.phone).in("status", ["awaiting_payment", "received", "preparing", "ready", "out_for_delivery"]),
     ]);
     if ((byPhone.count ?? 0) >= 5 || (byIp.count ?? 0) >= 20) return fail("rate_limited", 429);
     if ((active.count ?? 0) >= 3) return fail("too_many_active", 429);
@@ -115,6 +119,7 @@ export async function placeOrder(b: OrderInput, ctx: { ip: string | null; staff?
       address: b.type === "delivery" ? b.address : null,
       needs_call_confirm: needsCallConfirm,
       pickup_in_min: b.pickupInMin,
+      payment_method: b.paymentMethod,
       client_ip: ctx.ip,
       source: ctx.staff ? "callcentre" : "web",
       created_by: ctx.staff?.userId ?? null,
