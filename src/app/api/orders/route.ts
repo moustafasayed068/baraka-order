@@ -19,5 +19,5 @@ export async function POST(req: NextRequest) {
   const ip = req.headers.get("x-forwarded-for")?.split(",")[0].trim() || null;
   const r = await placeOrder(parsed.data, { ip });
   if (!r.ok) return NextResponse.json({ error: r.error, ...r.extra }, { status: r.status });
-  return NextResponse.json({ token: r.token, number: r.number }, { status: r.created ? 201 : 200 });
+  return NextResponse.json({ token: r.token, number: r.number, pay: parsed.data.paymentMethod === "online" }, { status: r.created ? 201 : 200 });
 }

@@ -2,7 +2,7 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
-const SECRET_NAMES = ["SUPABASE_SERVICE_ROLE_KEY", "PAYMOB_SECRET", "PAYMOB_HMAC", "SMS_API_KEY"];
+const SECRET_NAMES = ["SUPABASE_SERVICE_ROLE_KEY", "PAYMOB_SECRET_KEY", "PAYMOB_HMAC_SECRET", "SMS_API_KEY"];
 const values = SECRET_NAMES.map((n) => process.env[n]).filter((v) => v && v.length > 8);
 const needles = [...SECRET_NAMES, ...values, "service_role"];
 

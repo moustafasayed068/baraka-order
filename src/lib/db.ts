@@ -53,7 +53,7 @@ export async function activeOrderCount(branchId: string) {
 
 export type Tracking = {
   number: number; status: string; type: string; total: number; pickup_in_min: number; created_at: string;
-  customer_name: string; ahead: number; eta: number; delivery_fee: number;
+  customer_name: string; ahead: number; eta: number; delivery_fee: number; payment_status: string;
   address: { street: string; building: string; floor: string; apartment: string; landmark: string } | null;
   rider: { name: string; phone: string } | null;
   branch: { id: string; slug: string; name_ar: string; name_en: string; address_ar: string; address_en: string };
@@ -66,7 +66,7 @@ export async function getTracking(token: string): Promise<Tracking | null> {
   const db = adminDb();
   const { data: o } = await db
     .from("orders")
-    .select("id, branch_id, number, status, type, total, delivery_fee, address, pickup_in_min, created_at, customer_name, riders(name, phone), branches(id, slug, name_ar, name_en, address_ar, address_en, extra_wait_min), order_items(name_ar, name_en, option_ar, option_en, qty)")
+    .select("id, branch_id, number, status, type, total, delivery_fee, payment_status, address, pickup_in_min, created_at, customer_name, riders(name, phone), branches(id, slug, name_ar, name_en, address_ar, address_en, extra_wait_min), order_items(name_ar, name_en, option_ar, option_en, qty)")
     .eq("tracking_token", token)
     .maybeSingle();
   if (!o) return null;
@@ -82,6 +82,7 @@ export async function getTracking(token: string): Promise<Tracking | null> {
     customer_name: o.customer_name.split(" ")[0], ahead,
     eta: Math.max(estimateMin(ahead, branch.extra_wait_min), o.pickup_in_min) + (o.type === "delivery" ? DELIVERY_TRAVEL_MIN : 0),
     delivery_fee: o.delivery_fee,
+    payment_status: o.payment_status,
     address: o.address,
     // rider name and phone only once the order is out, so the customer can call them
     rider: o.status === "out_for_delivery" ? (o.riders as unknown as Tracking["rider"]) : null,
@@ -126,14 +127,15 @@ export type KitchenOrder = {
 export async function kitchenOrders(branchId: string): Promise<KitchenOrder[]> {
   const { data, error } = await adminDb()
     .from("orders")
-    .select("id, number, customer_name, type, status, total, payment_status, pickup_in_min, created_at, ready_at, needs_call_confirm, customer_phone, rider_id, problem, order_items(qty, name_ar, name_en, option_ar, option_en)")
+    .select("id, number, customer_name, type, status, total, payment_status, pickup_in_min, created_at, ready_at, needs_call_confirm, customer_phone, rider_id, problem, paid_at, order_items(qty, name_ar, name_en, option_ar, option_en)")
     .eq("branch_id", branchId)
     // plus deliveries a rider flagged with a problem, so the branch can deal with them
     .or("status.in.(received,preparing,ready),and(status.eq.out_for_delivery,problem.not.is.null)")
     .order("created_at");
   if (error) throw error;
-  return data.map(({ customer_name, customer_phone, order_items, ...o }) => ({
-    ...o, first_name: customer_name.split(" ")[0], items: order_items, call_phone: o.needs_call_confirm ? customer_phone : null,
+  // online orders reach the kitchen when paid, so their clock starts then
+  return data.map(({ customer_name, customer_phone, order_items, paid_at, ...o }) => ({
+    ...o, created_at: paid_at ?? o.created_at, first_name: customer_name.split(" ")[0], items: order_items, call_phone: o.needs_call_confirm ? customer_phone : null,
   }));
 }
 
