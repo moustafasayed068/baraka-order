@@ -312,3 +312,12 @@ a.chip[aria-current="true"] { border-color: var(--color-red); background: #FFE9E
 .kpi.k-ink { border-block-start-color: var(--color-ink); }
 .card { box-shadow: 0 8px 22px -20px rgba(120,20,10,.5); }
 .tbl tbody tr:hover { background: #FFFBF4; }
+
+/* ---------- online payment page ---------- */
+.pay-card { display: grid; gap: 12px; border: 1px solid var(--color-line); border-radius: 20px; padding: 16px; background: #fff; }
+.pay-lines { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; font-size: 14.5px; }
+.pay-lines li { display: flex; justify-content: space-between; gap: 10px; padding-block-end: 6px; border-block-end: 1px dashed var(--color-line); }
+.pay-lines small { color: var(--color-muted); }
+.pay-methods { text-align: center; font-weight: 700; font-size: 13.5px; color: var(--color-ink); background: #FFF1C9; border-radius: 12px; padding: 8px; }
+.text-ok { color: var(--color-ok); }
+.text-red { color: var(--color-red); }

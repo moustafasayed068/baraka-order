@@ -22,9 +22,9 @@ type Sheet = null | { kind: "cart" } | { kind: "item"; item: MenuItem; optionId:
 const MAX_QTY = 20;
 const unitPrice = (i: MenuItem, optionId: string | null) => i.base_price + (i.options.find((o) => o.id === optionId)?.price_delta ?? 0);
 
-export function Menu({ lang, branch, categories, items, blocked, delivery: zone, acceptsDelivery, initialMode }: {
+export function Menu({ lang, branch, categories, items, blocked, delivery: zone, acceptsDelivery, initialMode, onlinePay = false }: {
   lang: Lang; branch: string; categories: Category[]; items: MenuItem[]; blocked: boolean;
-  delivery: Delivery | null; acceptsDelivery: boolean; initialMode: "pickup" | "delivery";
+  delivery: Delivery | null; acceptsDelivery: boolean; initialMode: "pickup" | "delivery"; onlinePay?: boolean;
 }) {
   const t = dict[lang];
   const router = useRouter();
@@ -44,6 +44,7 @@ export function Menu({ lang, branch, categories, items, blocked, delivery: zone,
   const [error, setError] = useState<ErrorCode | null>(null);
   const [sending, setSending] = useState(false);
   const [query, setQuery] = useState("");
+  const [payOnline, setPayOnline] = useState(false);
   const [toast, setToast] = useState(0); // bumps on every add, drives the toast and the cart-bar pulse
   const honeypot = useRef<HTMLInputElement>(null);
   const idemKey = useRef("");
@@ -131,6 +132,7 @@ export function Menu({ lang, branch, categories, items, blocked, delivery: zone,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           branch, idempotencyKey: idemKey.current, type: mode, name: me.name.trim(), phone,
+          paymentMethod: onlinePay && payOnline ? "online" : "cash",
           ...(delivery ? { pickupInMin: 0, address: addr } : { pickupInMin }),
           lines: lines.map(({ itemId, optionId, qty }) => ({ itemId, optionId, qty })),
           website: honeypot.current?.value ?? "", fillMs: elapsed(mountedAt.current),
@@ -146,7 +148,7 @@ export function Menu({ lang, branch, categories, items, blocked, delivery: zone,
       if (delivery && saveAs) store.set("bk_addr", { ...saved, [saveAs]: addr });
       setCart([]);
       store.set(`bk_cart_${branch}`, []);
-      router.push(`/t/${data.token}`);
+      router.push(data.pay ? `/pay/${data.token}` : `/t/${data.token}`);
     } catch {
       setError("network"); // same idempotency key on retry, so a lost response never doubles the order
     } finally {
@@ -378,8 +380,10 @@ export function Menu({ lang, branch, categories, items, blocked, delivery: zone,
               <div className="opt-group">
                 <h4>{t.cart.payment}</h4>
                 <div className="chips">
-                  <button type="button" className="chip" aria-pressed="true">{delivery ? t.delivery.payCod : t.cart.payAtPickup}</button>
-                  <button type="button" className="chip" disabled>{t.cart.onlineSoon}</button>
+                  <button type="button" className="chip" aria-pressed={!onlinePay || !payOnline} onClick={() => setPayOnline(false)}>{delivery ? t.delivery.payCod : t.cart.payAtPickup}</button>
+                  {onlinePay
+                    ? <button type="button" className="chip" aria-pressed={payOnline} onClick={() => setPayOnline(true)}>💳 {t.pay.online}</button>
+                    : <button type="button" className="chip" disabled>{t.cart.onlineSoon}</button>}
                 </div>
               </div>
 

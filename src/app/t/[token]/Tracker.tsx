@@ -50,15 +50,18 @@ export function Tracker({ lang, token, initial }: { lang: Lang; token: string; i
       .subscribe((s) => setLive(s === "SUBSCRIBED"));
     const branchCh = db.channel(`branch:${initial.branch.id}`).on("broadcast", { event: "changed" }, refresh).subscribe();
     const poll = setInterval(() => !navigator.onLine || ch.state !== "joined" ? refresh() : undefined, 10_000);
+    // just back from the payment page: check often until the webhook confirms
+    const payPoll = o.status === "awaiting_payment" ? setInterval(refresh, 3000) : undefined;
     const onVisible = () => document.visibilityState === "visible" && refresh();
     document.addEventListener("visibilitychange", onVisible);
     return () => {
       clearInterval(poll);
+      clearInterval(payPoll);
       document.removeEventListener("visibilitychange", onVisible);
       db.removeChannel(ch);
       db.removeChannel(branchCh);
     };
-  }, [token, done, initial.branch.id]);
+  }, [token, done, initial.branch.id, o.status]);
 
   const status = o.status as OrderStatus;
   const isDelivery = o.type === "delivery";
@@ -87,7 +90,15 @@ export function Tracker({ lang, token, initial }: { lang: Lang; token: string; i
         {o.rider && (
           <a href={`tel:${o.rider.phone}`} className="btn yellow mt-1">📞 {t.track.callRider}: {o.rider.name}</a>
         )}
-        {!done && <div className="text-sm text-muted">{isDelivery ? t.track.payCod(o.total) : t.track.payCash(o.total)}</div>}
+        {o.status === "awaiting_payment" && (
+          <>
+            <div className="text-sm text-muted">{t.pay.confirming}</div>
+            <Link href={`/pay/${token}`} className="btn mt-1">{t.pay.payNow(o.total)}</Link>
+          </>
+        )}
+        {o.payment_status === "paid"
+          ? <div className="text-sm font-bold text-ok">✓ {t.pay.paid}</div>
+          : !done && o.status !== "awaiting_payment" && <div className="text-sm text-muted">{isDelivery ? t.track.payCod(o.total) : t.track.payCash(o.total)}</div>}
       </div>
 
       {o.address && (
