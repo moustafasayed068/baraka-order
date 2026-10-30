@@ -25,6 +25,10 @@ if [ "$(psql "$DB_URL" -Atc "select count(*) from customers where name like 'Syn
   echo "No synthetic history found. Run: psql \"\$DB_URL\" -f loadtest/sql/synthetic_history.sql" >&2; exit 1
 fi
 
+# pre-flight: the app and Supabase must answer before anything is measured
+curl -sf -o /dev/null "$BASE_URL/" || { echo "App not reachable at $BASE_URL (start it: loadtest/scripts/app.sh start)" >&2; exit 1; }
+curl -sf -o /dev/null -H "apikey: $ANON_KEY" "$SUPABASE_URL/rest/v1/branches?select=id&limit=1" || { echo "Supabase REST not reachable at $SUPABASE_URL" >&2; exit 1; }
+
 OUT=results/$(date +%Y%m%d-%H%M%S); mkdir -p "$OUT"
 RIDER_IDS=$(psql "$DB_URL" -Atc "select string_agg(r.id::text, ',' order by b.sort) from branches b join riders r on r.phone = '0100000' || lpad(b.sort::text, 2, '0') || '01'")
 ADMIN_COOKIE=$(NEXT_PUBLIC_SUPABASE_URL=$SUPABASE_URL NEXT_PUBLIC_SUPABASE_ANON_KEY=$ANON_KEY SUPABASE_SERVICE_ROLE_KEY=$SERVICE_ROLE_KEY \

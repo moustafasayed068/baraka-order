@@ -91,6 +91,12 @@ const uuid = () => "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) =
   return (c === "x" ? r : (r & 0x3) | 0x8).toString(16);
 });
 const sbGet = (path) => http.get(`${SB}/rest/v1/${path}`, { headers: { apikey: ANON, Authorization: `Bearer ${ANON}` }, tags: { name: "setup" } });
+// error responses can have no body (connection reset): never let that crash the VU
+const safeJson = (r, k) => { try { return r.json(k); } catch (e) { return null; } };
+// staff devices rotate over the branches per iteration, so every branch is worked and polled evenly
+const branchIdx = () => exec.scenario.iterationInTest % BRANCHES;
+// another tablet/rider already moved the ticket: the app answers 409 "stale", which is correct behaviour
+const staleOk = http.expectedStatuses({ min: 200, max: 399 }, 409);
 const cookieFrom = (res, name) => (res.cookies[name] && res.cookies[name][0] ? res.cookies[name][0].value : null);
 
 // ---------- setup: read menu, pair devices, sign riders in ----------
@@ -169,16 +175,17 @@ export function customer(data) {
   if (Math.random() < 0.05) {
     // double tap: the same checkout sent twice at once must yield one order
     const [a, c] = http.batch([["POST", `${BASE}/api/orders`, payload, params], ["POST", `${BASE}/api/orders`, payload, params]]);
-    if (a.status < 300 && c.status < 300 && a.json("token") !== c.json("token")) doubleTapMismatch.add(1);
+    if (a.status < 300 && c.status < 300 && safeJson(a, "token") !== safeJson(c, "token")) doubleTapMismatch.add(1);
     res = a.status < 300 ? a : c;
   } else {
     res = http.post(`${BASE}/api/orders`, payload, params);
   }
   if (res.status === 201 || res.status === 200) ordersCreated.add(1);
   else if (res.status >= 500 || res.status === 0) { ordersError.add(1, { status: String(res.status) }); bizErrors.add(1); return; }
-  else { ordersRejected.add(1, { error: String(res.json("error") || res.status) }); bizErrors.add(res.status !== 429); return; }
+  else { ordersRejected.add(1, { error: String(safeJson(res, "error") || res.status) }); bizErrors.add(res.status !== 429); return; }
   bizErrors.add(0);
-  const token = res.json("token");
+  const token = safeJson(res, "token");
+  if (!token) return;
 
   http.get(`${BASE}/t/${token}`, { tags: { name: "GET /t/[token]" } });
   const polls = Math.ceil(rnd(2, 6)); // customer keeps the tracking page open
@@ -192,11 +199,11 @@ export function customer(data) {
 // ---------- kitchen tablet: refresh board and work orders forward ----------
 const NEXT = { received: "start", preparing: "ready" };
 export function kitchen(data) {
-  const i = (exec.vu.idInTest - 1) % BRANCHES;
+  const i = branchIdx();
   const jar = { cookies: { bk_kitchen: data.kitchen[i] } };
   const res = http.get(`${BASE}/api/kitchen`, { ...jar, tags: { name: "GET /api/kitchen" } });
   if (!check(res, { "kitchen 200": (r) => r.status === 200 })) { sleep(3); return; }
-  const orders = res.json();
+  const orders = safeJson(res) || [];
   boardSize.add(orders.length);
   // work at most 6 tickets per refresh, oldest first, like a real line
   let moved = 0;
@@ -207,7 +214,7 @@ export function kitchen(data) {
     else if (o.status === "ready" && o.type === "pickup") body = { orderId: o.id, action: "collected" };
     else if (o.status === "ready" && o.type === "delivery" && !o.rider_id && data.riderIds && data.riderIds[i]) body = { orderId: o.id, action: "assign", riderId: data.riderIds[i] };
     if (!body) continue;
-    const r = http.post(`${BASE}/api/kitchen`, JSON.stringify(body), { ...jar, headers: jsonHeaders("10.255.1.1"), tags: { name: `POST /api/kitchen ${body.action}` } });
+    const r = http.post(`${BASE}/api/kitchen`, JSON.stringify(body), { ...jar, headers: jsonHeaders("10.255.1.1"), responseCallback: staleOk, tags: { name: `POST /api/kitchen ${body.action}` } });
     if (r.status === 200) { kitchenMoves.add(1); moved++; }
   }
   sleep(3);
@@ -215,7 +222,7 @@ export function kitchen(data) {
 
 // ---------- TV screen ----------
 export function screen(data) {
-  const i = (exec.vu.idInTest - 1) % BRANCHES;
+  const i = branchIdx();
   const res = http.get(`${BASE}/api/screen`, { cookies: { bk_screen: data.screen[i] }, tags: { name: "GET /api/screen" } });
   check(res, { "screen 200": (r) => r.status === 200 });
   sleep(5);
@@ -223,15 +230,15 @@ export function screen(data) {
 
 // ---------- rider phone ----------
 export function rider(data) {
-  const i = (exec.vu.idInTest - 1) % BRANCHES;
+  const i = branchIdx();
   if (!data.rider[i]) { sleep(10); return; }
   const jar = { cookies: { bk_rider: data.rider[i] } };
   const res = http.get(`${BASE}/api/rider`, { ...jar, tags: { name: "GET /api/rider" } });
   if (res.status !== 200) { sleep(5); return; }
-  for (const o of res.json("orders") || []) {
+  for (const o of safeJson(res, "orders") || []) {
     const action = o.status === "ready" ? "picked_up" : o.status === "out_for_delivery" ? "delivered" : null;
     if (!action) continue;
-    const r = http.post(`${BASE}/api/rider`, JSON.stringify({ orderId: o.id, action }), { ...jar, headers: jsonHeaders("10.255.2.1"), tags: { name: `POST /api/rider ${action}` } });
+    const r = http.post(`${BASE}/api/rider`, JSON.stringify({ orderId: o.id, action }), { ...jar, headers: jsonHeaders("10.255.2.1"), responseCallback: staleOk, tags: { name: `POST /api/rider ${action}` } });
     if (r.status === 200) riderMoves.add(1);
   }
   sleep(5);

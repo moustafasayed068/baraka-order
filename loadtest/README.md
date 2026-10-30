@@ -30,12 +30,15 @@ npx supabase start
 eval "$(npx supabase status -o env | grep -E '^(ANON_KEY|SERVICE_ROLE_KEY|DB_URL)=')"
 export ANON_KEY SERVICE_ROLE_KEY DB_URL
 
+# 1b. Make the local stack behave like a hosted paid project (see the script for why); repeat after restarts
+loadtest/scripts/staging-limits.sh
+
 # 2. One year of synthetic history (~912k orders, ~5 min) so queries run against realistic table sizes
 psql "$DB_URL" -v days=365 -v per_day=250 -f loadtest/sql/synthetic_history.sql
 
 # 3. Production build of the app pointed at the local stack
 export NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:54321 NEXT_PUBLIC_SUPABASE_ANON_KEY=$ANON_KEY SUPABASE_SERVICE_ROLE_KEY=$SERVICE_ROLE_KEY
-npx next build && npx next start -p 3000 &
+npx next build && loadtest/scripts/app.sh start
 
 # 4. Stepped series (each step ramps over 3 × STAGE seconds, holds 3 × STAGE, ramps down)
 loadtest/run.sh 100 500 1000          # STAGE=60 by default; STAGE=30 for a quicker pass
