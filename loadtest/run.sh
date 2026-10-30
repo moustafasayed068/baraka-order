@@ -29,6 +29,10 @@ fi
 curl -sf -o /dev/null "$BASE_URL/" || { echo "App not reachable at $BASE_URL (start it: loadtest/scripts/app.sh start)" >&2; exit 1; }
 curl -sf -o /dev/null -H "apikey: $ANON_KEY" "$SUPABASE_URL/rest/v1/branches?select=id&limit=1" || { echo "Supabase REST not reachable at $SUPABASE_URL" >&2; exit 1; }
 
+# fail fast if the stack was restarted and lost the staging limits (Realtime re-seeds Free-plan quotas on boot)
+RT_LIMIT=$(psql "$DB_URL" -Atc "select max_concurrent_users from _realtime.tenants limit 1" 2>/dev/null || echo "?")
+echo "Realtime max_concurrent_users=$RT_LIMIT (run scripts/staging-limits.sh to model a paid plan)"
+
 OUT=results/$(date +%Y%m%d-%H%M%S); mkdir -p "$OUT"
 RIDER_IDS=$(psql "$DB_URL" -Atc "select string_agg(r.id::text, ',' order by b.sort) from branches b join riders r on r.phone = '0100000' || lpad(b.sort::text, 2, '0') || '01'")
 ADMIN_COOKIE=$(NEXT_PUBLIC_SUPABASE_URL=$SUPABASE_URL NEXT_PUBLIC_SUPABASE_ANON_KEY=$ANON_KEY SUPABASE_SERVICE_ROLE_KEY=$SERVICE_ROLE_KEY \
@@ -39,7 +43,7 @@ for PEAK in "$@"; do
   echo "=== PEAK=$PEAK RUN_ID=$RUN_ID -> $OUT"
   # unlock branch PINs/riders in case an earlier run tripped a lockout; reset query stats
   psql "$DB_URL" -qc "update branch_pins set failed_attempts=0, locked_until=null; update riders set failed_attempts=0, locked_until=null; select extensions.pg_stat_statements_reset();" >/dev/null
-  DB_URL=$DB_URL scripts/monitor.sh "$OUT/monitor-$PEAK.csv" 5 & MON=$!
+  DB_URL=$DB_URL SERVICE_ROLE_KEY=$SERVICE_ROLE_KEY SUPABASE_URL=$SUPABASE_URL scripts/monitor.sh "$OUT/monitor-$PEAK.csv" 5 & MON=$!
   k6 run --quiet -e PEAK="$PEAK" -e STAGE="$STAGE" -e RUN_ID="$RUN_ID" -e BASE_URL="$BASE_URL" -e SUPABASE_URL="$SUPABASE_URL" \
     -e ANON_KEY="$ANON_KEY" -e RIDER_IDS="$RIDER_IDS" -e ADMIN_COOKIE="$ADMIN_COOKIE" -e OUT_DIR="$OUT" \
     --out csv="$OUT/k6-$PEAK.csv.gz" k6/baraka.js 2>&1 | tee "$OUT/k6-$PEAK.log" || true

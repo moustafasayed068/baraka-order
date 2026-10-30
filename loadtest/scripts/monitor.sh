@@ -12,10 +12,19 @@ while true; do
   # host processes: the Next.js server and the k6 load generator (same machine, so both compete for CPU)
   for proc in next-server k6; do
     pid=$(pgrep -x "$proc" || pgrep -f "^$proc" | head -1)
-    [ -n "$pid" ] && top -b -n 2 -d 1 -p "$pid" | tail -1 | awk -v ts="$ts" -v n="$proc" '{printf "%s,%s,%s,%d,\n", ts, n, $9, $6/1024}' >> "$OUT"
+    [ -z "$pid" ] && continue
+    cpu=$(top -b -n 2 -d 1 -p "$pid" | tail -1 | awk '{print $9}'); rss=$(awk '/VmRSS/{print int($2/1024)}' /proc/$pid/status 2>/dev/null)
+    echo "$ts,$proc,$cpu,${rss:-0}," >> "$OUT"
   done
   psql "$DB_URL" -At -F, -c "select state, count(*) from pg_stat_activity where datname='postgres' group by 1" 2>/dev/null \
     | while IFS=, read -r st n; do echo "$ts,pg_conn,,,${st:-null}=$n" >> "$OUT"; done
   psql "$DB_URL" -At -c "select count(*) from pg_stat_activity where wait_event_type='Lock'" 2>/dev/null | sed "s/^/$ts,pg_lock_waits,,,/" >> "$OUT"
+  # Realtime: concurrent connected clients as Realtime itself counts them (what its quota is enforced against)
+  if [ -n "${SERVICE_ROLE_KEY:-}" ]; then
+    n=$(curl -s -m 3 -H "Authorization: Bearer $SERVICE_ROLE_KEY" -H "apikey: $SERVICE_ROLE_KEY" \
+      "${SUPABASE_URL:-http://127.0.0.1:54321}/realtime/v1/api/tenants/realtime-dev/health" | sed -n 's/.*"connected_cluster":\([0-9]*\).*/\1/p')
+    echo "$ts,rt_connected,,,${n:-?}" >> "$OUT"
+  fi
+  # Next.js heap growth shows up as RSS; read it directly (top prints 1.5g-style units)
   sleep "$INTERVAL"
 done
