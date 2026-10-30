@@ -92,7 +92,7 @@ const uuid = () => "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) =
 });
 const sbGet = (path) => http.get(`${SB}/rest/v1/${path}`, { headers: { apikey: ANON, Authorization: `Bearer ${ANON}` }, tags: { name: "setup" } });
 // error responses can have no body (connection reset): never let that crash the VU
-const safeJson = (r, k) => { try { return r.json(k); } catch (e) { return null; } };
+const safeJson = (r, k) => { try { return k === undefined ? r.json() : r.json(k); } catch (e) { return null; } };
 // staff devices rotate over the branches per iteration, so every branch is worked and polled evenly
 const branchIdx = () => exec.scenario.iterationInTest % BRANCHES;
 // another tablet/rider already moved the ticket: the app answers 409 "stale", which is correct behaviour
@@ -175,8 +175,9 @@ export function customer(data) {
   if (Math.random() < 0.05) {
     // double tap: the same checkout sent twice at once must yield one order
     const [a, c] = http.batch([["POST", `${BASE}/api/orders`, payload, params], ["POST", `${BASE}/api/orders`, payload, params]]);
-    if (a.status < 300 && c.status < 300 && safeJson(a, "token") !== safeJson(c, "token")) doubleTapMismatch.add(1);
-    res = a.status < 300 ? a : c;
+    const ok = (r) => r.status === 200 || r.status === 201;
+    if (ok(a) && ok(c) && safeJson(a, "token") !== safeJson(c, "token")) doubleTapMismatch.add(1);
+    res = ok(a) ? a : c;
   } else {
     res = http.post(`${BASE}/api/orders`, payload, params);
   }
